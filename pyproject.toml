@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "falsify-inspect"
+version = "0.1.0"
+description = "PRML pre-registration integration for Inspect AI eval logs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Cüneyt Öztürk", email = "cuneyt@studio-11.co" },
+  { name = "Studio 11 Turkey Ltd. Şti." }
+]
+keywords = ["prml", "inspect-ai", "evaluation", "pre-registration", "ml", "ai-safety", "reproducibility"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Testing",
+]
+dependencies = [
+  "falsify>=0.1.4",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+inspect = ["inspect_ai>=0.3.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0"]
+
+[project.urls]
+Homepage = "https://falsify.dev"
+Spec = "https://spec.falsify.dev/v0.1"
+Repository = "https://github.com/studio-11-co/falsify-inspect"
+Issues = "https://github.com/studio-11-co/falsify-inspect/issues"
+
+[project.scripts]
+falsify-inspect = "falsify_inspect.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["falsify_inspect"]
