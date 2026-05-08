@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
-  { name = "Cüneyt Öztürk", email = "cuneyt@studio-11.co" },
+  { name = "Cüneyt Öztürk", email = "hello@studio-11.co" },
   { name = "Studio 11 Turkey Ltd. Şti." }
 ]
 keywords = ["prml", "inspect-ai", "evaluation", "pre-registration", "ml", "ai-safety", "reproducibility"]

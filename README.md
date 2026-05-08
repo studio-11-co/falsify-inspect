@@ -106,4 +106,4 @@ Exit codes:
 ## Authors
 
 Cüneyt Öztürk, co-founder, Studio 11 Turkey Ltd. Şti.
-Contact: cuneyt@studio-11.co · [falsify.dev](https://falsify.dev)
+Contact: hello@studio-11.co · [falsify.dev](https://falsify.dev)
