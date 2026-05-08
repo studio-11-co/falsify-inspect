@@ -5,6 +5,8 @@ PRML pre-registration for [Inspect AI](https://github.com/UKGovernmentBEIS/inspe
 [![PyPI](https://img.shields.io/pypi/v/falsify-inspect.svg)](https://pypi.org/project/falsify-inspect/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRML v0.1](https://img.shields.io/badge/PRML-v0.1-39D98A.svg)](https://spec.falsify.dev/v0.1)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/studio-11-co/falsify-inspect/badge)](https://scorecard.dev/viewer/?uri=github.com/studio-11-co/falsify-inspect)
+[![CI](https://github.com/studio-11-co/falsify-inspect/actions/workflows/test.yml/badge.svg)](https://github.com/studio-11-co/falsify-inspect/actions/workflows/test.yml)
 
 > A small adapter that lets you commit an Inspect AI eval claim's threshold to a SHA-256 hash *before* the eval runs, then verify the post-run log against that hash.
 
