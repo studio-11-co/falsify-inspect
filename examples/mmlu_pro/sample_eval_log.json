@@ -1,0 +1,26 @@
+{
+  "eval": {
+    "task": "mmlu_pro_prml",
+    "model": "openai/gpt-4o-mini",
+    "dataset": {
+      "name": "TIGER-Lab/MMLU-Pro",
+      "sha": "hf:527feea0afed1de15a8c115abf7be4c912123315"
+    },
+    "config": {
+      "sample_size": 10,
+      "seed": 42
+    }
+  },
+  "results": {
+    "scores": [
+      {
+        "name": "accuracy",
+        "metrics": {
+          "accuracy": {
+            "value": 0.8
+          }
+        }
+      }
+    ]
+  }
+}
