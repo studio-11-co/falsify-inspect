@@ -31,5 +31,7 @@ def test_verify_malformed_json_exits_2_without_traceback(tmp_path: Path):
     )
 
     assert result.returncode == 2
-    assert "structurally invalid log:" in result.stderr
+    assert result.stderr == (
+        "structurally invalid log: malformed JSON: Expecting value\n"
+    )
     assert "Traceback" not in result.stderr
