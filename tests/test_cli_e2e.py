@@ -187,6 +187,29 @@ def test_cli_verify_seed_drift_exit_3_tamper(tmp_path: Path):
     assert r.returncode == 3, f"expected 3 (tamper), got {r.returncode}\nstderr={r.stderr}"
 
 
+def test_cli_verify_missing_metric_field_exit_2_not_3(tmp_path: Path):
+    """A structurally invalid log (no `results.scores`) must exit 2, never 3.
+
+    Conflating 'malformed log' with 'tamper' (exit 3) corrupts the CI signal:
+    a downstream consumer would think someone edited the threshold post-hoc
+    when in fact the eval log shape is just wrong. See issue #12."""
+    h, manifest = _lock(tmp_path)
+    ts = _pre_registered_from_manifest(manifest)
+    nomet = tmp_path / "nomet.log"
+    nomet.write_text(json.dumps({"some": "valid_json_but_no_metric"}))
+    r = _run(
+        "verify", str(nomet),
+        "--hash", h,
+        "--threshold", "0.95",
+        "--threshold-direction", ">=",
+        "--pre-registered", ts,
+    )
+    assert r.returncode == 2, f"expected 2 (malformed), got {r.returncode}\nstderr={r.stderr}"
+    assert "structurally invalid" in r.stderr.lower()
+    # Crucially: must NOT be the tamper signal.
+    assert "tamper" not in r.stderr.lower() or "not a tamper" in r.stderr.lower()
+
+
 def test_cli_verify_missing_log_exit_2(tmp_path: Path):
     h, manifest = _lock(tmp_path)
     ts = _pre_registered_from_manifest(manifest)

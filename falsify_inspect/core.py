@@ -19,6 +19,15 @@ class PRMLVerificationError(Exception):
     """Raised when an eval log fails PRML hash verification."""
 
 
+class MalformedLogError(Exception):
+    """Raised when the eval log is structurally invalid (missing required
+    fields, unparseable shape) — distinct from PRMLVerificationError, which
+    signals a hash/threshold disagreement on a *well-formed* log.
+
+    The CLI maps this to exit 2 so CI consumers do not confuse a malformed
+    log with a tamper signal (exit 3)."""
+
+
 # -- Data class ----------------------------------------------------------------
 
 
@@ -216,8 +225,10 @@ def verify_eval_log(
     """
     extracted = extract_manifest_from_log(log_path)
     if not extracted.get("metric"):
-        raise PRMLVerificationError(
-            f"could not extract primary metric from log {log_path}"
+        raise MalformedLogError(
+            f"could not extract primary metric from log {log_path}: "
+            "the log is structurally invalid (no `results.scores[].name`). "
+            "This is not a tamper — it means the log shape is wrong."
         )
 
     fields = {
@@ -234,8 +245,9 @@ def verify_eval_log(
     }
     missing = [k for k, v in fields.items() if v is None and k != "inspect_task"]
     if missing:
-        raise PRMLVerificationError(
-            f"missing fields after extraction: {missing}; supply via kwargs"
+        raise MalformedLogError(
+            f"missing fields after extraction: {missing}; supply via kwargs. "
+            "This is a structurally invalid log, not a tamper."
         )
 
     manifest = InspectManifest(value=None, **fields)

@@ -29,9 +29,10 @@ from falsify_inspect.core import (
     extract_manifest_from_log,
     InspectManifest,
     PRMLVerificationError,
+    MalformedLogError,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "preregister",
@@ -39,5 +40,6 @@ __all__ = [
     "extract_manifest_from_log",
     "InspectManifest",
     "PRMLVerificationError",
+    "MalformedLogError",
     "__version__",
 ]

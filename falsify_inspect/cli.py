@@ -6,7 +6,12 @@ import argparse
 import json
 import sys
 
-from falsify_inspect.core import preregister, verify_eval_log, PRMLVerificationError
+from falsify_inspect.core import (
+    preregister,
+    verify_eval_log,
+    PRMLVerificationError,
+    MalformedLogError,
+)
 
 
 def _cmd_lock(args: argparse.Namespace) -> int:
@@ -40,6 +45,9 @@ def _cmd_verify(args: argparse.Namespace) -> int:
             sample_size=args.sample_size,
             seed=args.seed,
         )
+    except MalformedLogError as exc:
+        sys.stderr.write(f"structurally invalid log: {exc}\n")
+        return 2
     except PRMLVerificationError as exc:
         sys.stderr.write(f"verification error: {exc}\n")
         return 3
