@@ -46,6 +46,9 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     except FileNotFoundError as exc:
         sys.stderr.write(f"log not found: {exc}\n")
         return 2
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"structurally invalid log: malformed JSON: {exc.msg}\n")
+        return 2
 
     sys.stdout.write(json.dumps(result, indent=2, default=str) + "\n")
     if not result["hash_match"]:
