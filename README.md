@@ -92,6 +92,16 @@ Exit codes:
 - `3` — tamper (hash mismatch — fields changed after pre-registration)
 - `2` — log not found / structurally invalid
 
+## Inspect AI version troubleshooting
+
+`falsify-inspect` 0.1.x supports the Inspect AI eval log shape produced by `inspect_ai>=0.3.0`, which is the version range installed by the optional `inspect` extra. If `falsify-inspect verify` reports that a log is structurally invalid, cannot find the expected score/metadata fields, or raises a parsing error immediately after an Inspect AI upgrade, first confirm that the package versions are in sync:
+
+```bash
+python -m pip show falsify-inspect inspect_ai
+```
+
+When the log was generated with a newer Inspect AI release, retry verification in an environment using the supported range, or regenerate the log after upgrading `falsify-inspect` to a release that documents support for the newer Inspect AI schema. If the versions look compatible, keep the failing `eval.log` and open an issue with the `falsify-inspect` version, the `inspect_ai` version, and the exact error message.
+
 ## What this plugin does *not* do
 
 - Does not modify `inspect_ai` itself. It reads existing eval log JSON.
