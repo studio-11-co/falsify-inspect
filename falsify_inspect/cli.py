@@ -52,7 +52,9 @@ def _cmd_verify(args: argparse.Namespace) -> int:
         sys.stderr.write(f"verification error: {exc}\n")
         return 3
     except json.JSONDecodeError as exc:
-        sys.stderr.write(f"structurally invalid log: {exc}\n")
+        sys.stderr.write(
+            f"structurally invalid log: malformed JSON: {exc.msg}\n"
+        )
         return 2
     except FileNotFoundError as exc:
         sys.stderr.write(f"log not found: {exc}\n")
