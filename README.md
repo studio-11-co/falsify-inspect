@@ -114,6 +114,15 @@ When the log was generated with a newer Inspect AI release, retry verification i
 - This package: MIT
 - Patent non-assertion grant: [appendix of the spec](https://spec.falsify.dev/v0.1#appendix-patent-grant)
 
+## Audit & compliance crosswalks
+
+Where this plugin fits in named AI governance frameworks (subcategory-by-subcategory, FULL / PARTIAL / NONE tagged):
+
+- [EU AI Act Article 12 crosswalk](https://spec.falsify.dev/eu-ai-act/article-12/) — automated-logging pattern for the 2 August 2026 deadline
+- [NIST AI RMF 1.0 crosswalk](https://spec.falsify.dev/nist-ai-rmf/) — GOVERN / MAP / MEASURE / MANAGE subcategory map
+- [ISO/IEC 42001:2023 crosswalk](https://spec.falsify.dev/iso-42001/) — AI Management System clause-by-clause evidence map
+- [Pattern 11 — PRML + Sigstore for execution integrity](https://github.com/studio-11-co/falsify-cookbook/blob/main/patterns/11-sigstore-execution.md) — closes the §8.1 gap with cosign + Rekor
+
 ## Authors
 
 Cüneyt Öztürk, co-founder, Studio 11 Turkey Ltd. Şti.
