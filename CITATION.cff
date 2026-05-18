@@ -15,8 +15,8 @@ type: software
 license: MIT
 repository-code: "https://github.com/studio-11-co/falsify-inspect"
 url: "https://falsify.dev"
-version: "0.1.0"
-date-released: 2026-05-08
+version: "0.1.2"
+date-released: 2026-05-16
 keywords:
   - "PRML"
   - "pre-registration"
@@ -36,7 +36,7 @@ preferred-citation:
       given-names: "Cüneyt"
   year: 2026
   url: "https://github.com/studio-11-co/falsify-inspect"
-  version: "0.1.0"
+  version: "0.1.2"
 references:
   - type: software
     title: "falsify — PRML reference implementation"
