@@ -11,6 +11,8 @@ PRML pre-registration for [Inspect AI](https://github.com/UKGovernmentBEIS/inspe
 
 > A small adapter that lets you commit an Inspect AI eval claim's threshold to a SHA-256 hash *before* the eval runs, then verify the post-run log against that hash.
 
+[![60-second PRML walkthrough](https://spec.falsify.dev/demo/demo.gif)](https://spec.falsify.dev/demo/)
+
 ---
 
 ## Why
