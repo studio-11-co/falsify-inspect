@@ -3,7 +3,7 @@
 PRML pre-registration for [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) eval logs.
 
 [![PyPI](https://img.shields.io/pypi/v/falsify-inspect.svg)](https://pypi.org/project/falsify-inspect/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20177839.svg)](https://doi.org/10.5281/zenodo.20177839)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20177839-blue.svg)](https://doi.org/10.5281/zenodo.20177839)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRML v0.1](https://img.shields.io/badge/PRML-v0.1-39D98A.svg)](https://spec.falsify.dev/v0.1)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/studio-11-co/falsify-inspect/badge)](https://scorecard.dev/viewer/?uri=github.com/studio-11-co/falsify-inspect)
