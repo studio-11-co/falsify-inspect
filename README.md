@@ -127,8 +127,8 @@ Where this plugin fits in named AI governance frameworks (subcategory-by-subcate
 
 ## Authors
 
-Cüneyt Öztürk, co-founder, Studio 11 Turkey Ltd. Şti.
-Contact: hello@studio-11.co · [falsify.dev](https://falsify.dev)
+Cüneyt Öztürk
+Contact: hello@falsify.dev · [falsify.dev](https://falsify.dev)
 
 
 ---

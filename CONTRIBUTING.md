@@ -26,4 +26,4 @@ By contributing you agree that your work is released under the repo's stated lic
 
 ## Maintainer
 
-Cüneyt Öztürk — hello@studio-11.co
+Cüneyt Öztürk — hello@falsify.dev

@@ -4,7 +4,7 @@
 
 **Do not open a public GitHub issue for a security vulnerability.**
 
-Email **hello@studio-11.co** with subject prefix `[security]`. Include:
+Email **hello@falsify.dev** with subject prefix `[security]`. Include:
 
 - The vulnerable version (PyPI `falsify-inspect` version, or commit SHA)
 - A reproducer if you have one
