@@ -5,7 +5,7 @@ PRML and its reference implementations are open standards work. Issues, PRs, and
 ## Quick paths
 
 - **Found a bug:** open an issue with a minimal repro.
-- **Spec-level question:** ask in [studio-11-co/falsify-hackathon discussions](https://github.com/studio-11-co/falsify-hackathon/discussions). Repo-level questions stay here.
+- **Spec-level question:** ask in [studio-11-co/falsify discussions](https://github.com/studio-11-co/falsify/discussions). Repo-level questions stay here.
 - **Want to add code:** see `good-first-issue` and `help-wanted` labels for scoped work. For larger changes open an issue first so we can align on shape before you write a long PR.
 
 ## Pull requests
