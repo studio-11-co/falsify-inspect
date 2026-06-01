@@ -62,6 +62,32 @@ result = verify_eval_log(
 assert result["ok"]
 ```
 
+## Quickstart — Inspect hook (automatic, recommended)
+
+As of v0.2.0 `falsify-inspect` registers a native Inspect [hook](https://inspect.aisi.org.uk/extensions.html#hooks). Pre-register a manifest, point `FALSIFY_PRML` at it, and run your eval as usual. No changes to your Inspect code:
+
+```bash
+# 1. Pre-register the claim (writes harmbench.prml.yaml)
+falsify-inspect lock \
+  --metric refusal_rate --threshold 0.95 --threshold-direction ">=" \
+  --dataset harmbench-v1 --dataset-hash sha256:abc... \
+  --model-version "claude-3.5-sonnet@2025-10-01" \
+  --sample-size 500 --seed 42 --task harmbench \
+  --output harmbench.prml.yaml
+
+# 2. Run the eval with the hook enabled
+export FALSIFY_PRML=harmbench.prml.yaml
+inspect eval harmbench.py --model anthropic/claude-3-5-sonnet-latest
+```
+
+At each task end the hook reads the realised metric, checks it against the committed threshold, confirms the run's identity (model, dataset, task) matches what you pre-registered, and writes a `harmbench.prml-receipt.json` with a `PASS` / `FAIL` / `TAMPERED` verdict. `TAMPERED` means the run did not match the pre-registration (for example a swapped model), so you cannot quietly change the claim after seeing results.
+
+The hook is observe-only by default. To make a non-`PASS` verdict fail the run (a CI gate):
+
+```bash
+export FALSIFY_PRML_STRICT=1
+```
+
 ## Quickstart — CLI
 
 ```bash
@@ -120,7 +146,7 @@ When the log was generated with a newer Inspect AI release, retry verification i
 
 Where this plugin fits in named AI governance frameworks (subcategory-by-subcategory, FULL / PARTIAL / NONE tagged):
 
-- [EU AI Act Article 12 crosswalk](https://spec.falsify.dev/eu-ai-act/article-12/) — automated-logging pattern for the 2 August 2026 deadline
+- [EU AI Act Article 12 crosswalk](https://spec.falsify.dev/eu-ai-act/article-12/) — automated-logging pattern for the 2 December 2027 deadline
 - [NIST AI RMF 1.0 crosswalk](https://spec.falsify.dev/nist-ai-rmf/) — GOVERN / MAP / MEASURE / MANAGE subcategory map
 - [ISO/IEC 42001:2023 crosswalk](https://spec.falsify.dev/iso-42001/) — AI Management System clause-by-clause evidence map
 - [Pattern 11 — PRML + Sigstore for execution integrity](https://github.com/studio-11-co/falsify-cookbook/blob/main/patterns/11-sigstore-execution.md) — closes the §8.1 gap with cosign + Rekor

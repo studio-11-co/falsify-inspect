@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "falsify-inspect"
-version = "0.1.2"
+version = "0.2.0"
 description = "PRML pre-registration integration for Inspect AI eval logs"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -42,6 +42,11 @@ Issues = "https://github.com/studio-11-co/falsify-inspect/issues"
 
 [project.scripts]
 falsify-inspect = "falsify_inspect.cli:main"
+
+# Inspect AI loads this entry point at startup, which registers the
+# FalsifyHooks PRML-verification hook. Active only when FALSIFY_PRML is set.
+[project.entry-points.inspect_ai]
+falsify_inspect = "falsify_inspect._registry"
 
 [tool.hatch.build.targets.wheel]
 packages = ["falsify_inspect"]
