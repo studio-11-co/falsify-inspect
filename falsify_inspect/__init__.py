@@ -26,17 +26,28 @@ CLI:
 from falsify_inspect.core import (
     preregister,
     verify_eval_log,
+    verify_live,
+    verify_observation,
+    load_committed_manifest,
     extract_manifest_from_log,
     InspectManifest,
     PRMLVerificationError,
     MalformedLogError,
 )
 
-__version__ = "0.1.1"
+# The Inspect hook (falsify_inspect.hooks.FalsifyHooks) is intentionally NOT
+# imported here: it requires inspect_ai, and the manual API above must stay
+# importable without it. Inspect loads the hook via the `inspect_ai` entry
+# point (falsify_inspect._registry).
+
+__version__ = "0.2.0"
 
 __all__ = [
     "preregister",
     "verify_eval_log",
+    "verify_live",
+    "verify_observation",
+    "load_committed_manifest",
     "extract_manifest_from_log",
     "InspectManifest",
     "PRMLVerificationError",

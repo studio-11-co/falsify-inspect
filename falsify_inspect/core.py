@@ -275,3 +275,171 @@ def verify_eval_log(
         "actual_hash": actual_hash,
         "manifest": asdict(manifest),
     }
+
+
+# -- Hook support (in-memory verification) -------------------------------------
+#
+# These helpers exist so the Inspect hook (falsify_inspect.hooks) can verify a
+# live EvalLog object without writing it to disk first. verify_eval_log above is
+# kept untouched (it is the published, file-based path); the logic below is
+# additive.
+
+_OPS = {
+    ">=": lambda a, b: a >= b,
+    "<=": lambda a, b: a <= b,
+    ">": lambda a, b: a > b,
+    "<": lambda a, b: a < b,
+    "==": lambda a, b: a == b,
+}
+
+
+def load_committed_manifest(path: str | Path) -> tuple[dict[str, Any], str]:
+    """Load a pre-registered ``.prml.yaml`` and return ``(fields, hash)``.
+
+    Because the file is the canonical byte form produced by
+    ``InspectManifest.to_canonical_yaml()``, ``sha256(file)`` equals the hash
+    that ``preregister()`` returned at lock time. That is the committed hash.
+    """
+    raw = Path(path).read_bytes()
+    committed_hash = "sha256:" + hashlib.sha256(raw).hexdigest()
+    fields = yaml.safe_load(raw.decode("utf-8")) or {}
+    if not isinstance(fields, dict):
+        raise MalformedLogError(
+            f"manifest at {path} did not parse to a mapping (got {type(fields).__name__})"
+        )
+    return fields, committed_hash
+
+
+def verify_observation(
+    *,
+    expected_hash: str,
+    observed_value: float | None,
+    metric: str,
+    dataset: str | None,
+    dataset_hash: str | None,
+    model_version: str | None,
+    threshold: float,
+    threshold_direction: str,
+    sample_size: int | None,
+    seed: int | None,
+    pre_registered: str,
+    inspect_task: str | None = None,
+) -> dict[str, Any]:
+    """Rebuild a manifest from identity fields + observed value, then return a
+    verdict dict with an explicit ``status`` of PASS / FAIL / TAMPERED.
+
+    TAMPERED means the rebuilt hash does not equal ``expected_hash`` (the run's
+    identity, e.g. model or dataset, does not match what was pre-registered).
+    FAIL means the hash matches but the observed value misses the threshold.
+    """
+    if threshold_direction not in _OPS:
+        raise ValueError(
+            f"threshold_direction must be one of >= <= > < ==, got {threshold_direction!r}"
+        )
+    manifest = InspectManifest(
+        metric=metric,
+        value=None,
+        dataset=dataset,
+        dataset_hash=dataset_hash,
+        model_version=model_version,
+        threshold=threshold,
+        threshold_direction=threshold_direction,
+        sample_size=sample_size,
+        seed=seed,
+        pre_registered=pre_registered,
+        inspect_task=inspect_task,
+    )
+    actual_hash = manifest.hash()
+    hash_match = actual_hash == expected_hash
+    threshold_ok = (
+        observed_value is not None
+        and _OPS[threshold_direction](observed_value, threshold)
+    )
+    if not hash_match:
+        status = "TAMPERED"
+    elif threshold_ok:
+        status = "PASS"
+    else:
+        status = "FAIL"
+    return {
+        "ok": hash_match and threshold_ok,
+        "status": status,
+        "hash_match": hash_match,
+        "threshold_satisfied": threshold_ok,
+        "observed_value": observed_value,
+        "expected_hash": expected_hash,
+        "actual_hash": actual_hash,
+        "manifest": asdict(manifest),
+    }
+
+
+_MANIFEST_FIELDS = {
+    "metric", "dataset", "dataset_hash", "model_version", "threshold",
+    "threshold_direction", "sample_size", "seed", "pre_registered",
+    "prml_version", "inspect_task", "inspect_scorer",
+}
+
+
+def verify_live(
+    *,
+    manifest_path: str | Path,
+    observed_value: float | None,
+    live_model: str | None = None,
+    live_dataset: str | None = None,
+    live_dataset_hash: str | None = None,
+    live_task: str | None = None,
+) -> dict[str, Any]:
+    """Verify a live run against a committed manifest file.
+
+    Loads the pre-registered manifest (its committed hash is ``sha256(file)``),
+    overrides the identity fields the eval run actually used (model, dataset,
+    task) where the caller supplies them, rebuilds the manifest, and compares.
+    A mismatch means the run did not match the pre-registration (TAMPERED);
+    a match with a missed threshold is FAIL; a match that meets it is PASS.
+
+    All committed fields not supplied by the live run (dataset hash, seed,
+    sample size, scorer, threshold, timestamp) are taken from the manifest as
+    committed, so they do not falsely trigger TAMPERED when the eval log does
+    not expose them.
+    """
+    committed, committed_hash = load_committed_manifest(manifest_path)
+    fields = {k: v for k, v in committed.items() if k in _MANIFEST_FIELDS}
+    if live_model is not None:
+        fields["model_version"] = live_model
+    if live_dataset is not None:
+        fields["dataset"] = live_dataset
+    if live_dataset_hash is not None:
+        fields["dataset_hash"] = live_dataset_hash
+    if fields.get("inspect_task") is not None and live_task is not None:
+        fields["inspect_task"] = live_task
+
+    manifest = InspectManifest(value=None, **fields)
+    actual_hash = manifest.hash()
+    hash_match = actual_hash == committed_hash
+
+    direction = fields.get("threshold_direction")
+    threshold = fields.get("threshold")
+    threshold_ok = (
+        observed_value is not None
+        and direction in _OPS
+        and threshold is not None
+        and _OPS[direction](observed_value, threshold)
+    )
+    if not hash_match:
+        status = "TAMPERED"
+    elif threshold_ok:
+        status = "PASS"
+    else:
+        status = "FAIL"
+    return {
+        "ok": hash_match and threshold_ok,
+        "status": status,
+        "hash_match": hash_match,
+        "threshold_satisfied": threshold_ok,
+        "observed_value": observed_value,
+        "threshold": threshold,
+        "threshold_direction": direction,
+        "metric": fields.get("metric"),
+        "expected_hash": committed_hash,
+        "actual_hash": actual_hash,
+    }
