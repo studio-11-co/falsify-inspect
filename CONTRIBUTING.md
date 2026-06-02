@@ -14,7 +14,7 @@ PRML and its reference implementations are open standards work. Issues, PRs, and
 - Reference the issue number in the PR body if one exists.
 - Tests: add or update where relevant. CI must be green before review.
 - Commit messages: imperative mood, one short summary line, optional body. No emoji.
-- v0.1 conformance: any change that alters canonical-byte output must preserve byte-equivalence across the 20 conformance vectors. CI catches this.
+- v0.1 conformance: any change that alters canonical-byte output must preserve byte-equivalence across the 21 conformance vectors. CI catches this.
 
 ## Code of conduct
 
