@@ -6,7 +6,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "06:00"
-      timezone: "Europe/Istanbul"
+      timezone: "Etc/UTC"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
