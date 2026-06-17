@@ -27,8 +27,8 @@ jobs:
         run: |
           h=$(falsify-inspect lock \
             --metric refusal_rate --threshold 0.95 --threshold-direction ">=" \
-            --dataset harmbench-v1 --dataset-hash sha256:abc \
+            --dataset harmbench-v1 --dataset-hash e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 \
             --model-version "claude-3.5-sonnet@2025-10-01" \
             --sample-size 500 --seed 42 --task harmbench)
           echo "hash: $h"
-          [[ "$h" =~ ^sha256: ]] || (echo "lock did not produce sha256: prefix"; exit 1)
+          [[ "$h" =~ ^[0-9a-f]{64}$ ]] || (echo "lock did not produce a 64-hex PRML hash"; exit 1)
