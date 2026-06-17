@@ -30,27 +30,36 @@ inspect eval examples/mmlu_pro/mmlu_pro_prml.py \
   --sample-shuffle 42
 ```
 
-Before publishing a result, lock the claim fields that will be verified later:
+Before publishing a result, lock the claim fields that will be verified later.
+Manifests follow the real **PRML v0.1** schema: `--threshold-direction` becomes
+the PRML `comparator`, `--dataset` becomes `dataset.id`, `--model-version`
+becomes `producer.id`, and `--dataset-hash` must be a **64-char lowercase hex
+SHA-256** (the old `hf:`/`sha256:`-prefixed forms are not valid PRML):
 
 ```bash
 falsify-inspect lock \
   --metric accuracy \
   --threshold 0.75 \
   --threshold-direction ">=" \
-  --dataset TIGER-Lab/MMLU-Pro \
-  --dataset-hash hf:527feea0afed1de15a8c115abf7be4c912123315 \
+  --dataset "TIGER-Lab/MMLU-Pro@527feea0afed1de15a8c115abf7be4c912123315" \
+  --dataset-hash 316be51cdaf3e07bcc17fcabbab88abd7105dd5f96e02534683855fcc8cbc14a \
   --model-version openai/gpt-4o-mini \
   --sample-size 10 \
   --seed 42 \
   --task mmlu_pro_prml \
+  --scorer choice \
+  --claim-id "TIGER-Lab/MMLU-Pro:accuracy" \
   --output examples/mmlu_pro/claim.prml.yaml
 ```
 
-The checked-in manifest hashes to:
+The checked-in manifest hashes (canonical PRML SHA-256) to:
 
 ```text
-sha256:218b553d49c6f1f4b1f100a1c143995cc4ece4cbda2e8366d0817060783f1026
+475c25dc2f7e4a268bd502ecb4e668bf04638a285e7d1d3350581d6ce55d7759
 ```
+
+You can re-derive it with the `falsify` reference CLI: `falsify hash
+examples/mmlu_pro/claim.prml.yaml`.
 
 ## Verify the sample claim
 

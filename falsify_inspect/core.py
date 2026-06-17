@@ -1,14 +1,38 @@
-"""Core integration: PRML manifest generation + Inspect AI eval log verification."""
+"""Core integration: PRML v0.1 manifest generation + Inspect AI eval log verification.
+
+This adapter is a thin Inspect-AI-shaped layer over the published ``falsify``
+package's reference implementation (``falsify_prml``). It does NOT carry its own
+canonicalization, hashing, validation or predicate logic — all of that is
+delegated to ``falsify_prml`` so the hash an Inspect user commits is byte-for-byte
+the same one the ``falsify`` CLI, the JS/Go/Rust reference impls, and every other
+PRML surface produce. See https://spec.falsify.dev/v0.1.
+
+Manifests follow the real PRML v0.1 schema (nine required fields)::
+
+    version: prml/0.1
+    claim_id: <stable id>
+    created_at: <RFC 3339>
+    metric: <name>
+    comparator: ">=" | "<=" | ">" | "<" | "=="
+    threshold: <float>
+    dataset: {id: <name>, hash: <64 lowercase hex>}
+    seed: <int>
+    producer: {id: <model/org id>}
+
+Inspect-specific context (task name, scorer name, sample size) is carried as
+extra top-level keys (``inspect_task``, ``inspect_scorer``, ``sample_size``).
+``falsify_prml.validate_manifest`` allows unknown keys, and they participate in
+the canonical hash like any other field.
+"""
 
 from __future__ import annotations
 
 import datetime as _dt
-import hashlib
-import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import falsify_prml as _prml
 import yaml
 
 
@@ -28,63 +52,117 @@ class MalformedLogError(Exception):
     log with a tamper signal (exit 3)."""
 
 
+# Comparators accepted by PRML v0.1 (mirrors falsify_prml.VALID_COMPARATORS).
+_COMPARATORS = {">=", "<=", ">", "<", "=="}
+
+# Inspect-specific extra keys carried in the manifest alongside the nine
+# required PRML fields. These are NOT part of the PRML schema, but PRML allows
+# extra keys; they are hashed like everything else.
+_EXTRA_KEYS = ("inspect_task", "inspect_scorer", "sample_size")
+
+
 # -- Data class ----------------------------------------------------------------
 
 
 @dataclass
 class InspectManifest:
-    """A PRML manifest scoped to Inspect AI eval logs.
+    """A PRML v0.1 manifest scoped to Inspect AI eval logs.
 
-    Wraps the eight required PRML v0.1 fields plus optional Inspect-specific
-    metadata (task name, eval log path, scorer name).
+    Holds the real PRML v0.1 fields. Identity that an Inspect run exposes maps
+    onto the PRML v0.1 schema as follows:
+
+        metric            -> metric
+        threshold         -> threshold
+        comparator        -> comparator
+        dataset_id        -> dataset.id
+        dataset_hash      -> dataset.hash   (64 lowercase hex)
+        producer_id       -> producer.id
+        seed              -> seed
+        created_at (RFC 3339) -> created_at
+        inspect_task      -> extra key ``inspect_task``
+        inspect_scorer    -> extra key ``inspect_scorer``
+        sample_size       -> extra key ``sample_size``
     """
 
     metric: str
-    value: float | None  # None at pre-registration; filled at verify time
-    dataset: str
-    dataset_hash: str
-    model_version: str
+    comparator: str  # ">=" | "<=" | "==" | ">" | "<"
     threshold: float
-    threshold_direction: str  # ">=" | "<=" | "==" | ">" | "<"
-    sample_size: int
+    dataset_id: str
+    dataset_hash: str
+    producer_id: str
     seed: int
-    pre_registered: str  # RFC 3339
-    prml_version: str = "0.1"
+    created_at: str  # RFC 3339
+    claim_id: str
+    version: str = "prml/0.1"
 
-    # Inspect-specific (optional)
+    # Inspect-specific (optional) — carried as extra top-level keys
     inspect_task: str | None = None
     inspect_scorer: str | None = None
+    sample_size: int | None = None
 
-    def to_canonical_yaml(self) -> bytes:
-        """Canonical byte serialisation per PRML v0.1 §4.
+    def to_dict(self) -> dict[str, Any]:
+        """Render the real PRML v0.1 manifest dict (the thing that gets hashed).
 
-        - keys sorted alphabetically
-        - strings double-quoted
-        - floats rendered with Python's default repr (deterministic on CPython)
-        - LF line endings, no trailing whitespace
-        - UTF-8 encoded
-        - `value` field excluded at lock time (filled at verify)
+        None-valued optional Inspect fields are omitted so they do not change
+        the canonical bytes when unset.
         """
-        d = asdict(self)
-        # exclude value at lock time — manifest commits the *threshold*,
-        # the value is what we'll measure later
-        d.pop("value", None)
-        # exclude None-valued optional Inspect fields from the canonical hash
-        d = {k: v for k, v in d.items() if v is not None}
-        canonical = yaml.safe_dump(
-            d,
-            default_flow_style=False,
-            sort_keys=True,
-            width=float("inf"),
-            allow_unicode=False,
-        )
-        # normalise line endings
-        canonical = canonical.replace("\r\n", "\n").rstrip() + "\n"
-        return canonical.encode("utf-8")
+        m: dict[str, Any] = {
+            "version": self.version,
+            "claim_id": self.claim_id,
+            "created_at": self.created_at,
+            "metric": self.metric,
+            "comparator": self.comparator,
+            "threshold": self.threshold,
+            "dataset": {"id": self.dataset_id, "hash": self.dataset_hash},
+            "seed": self.seed,
+            "producer": {"id": self.producer_id},
+        }
+        for key in _EXTRA_KEYS:
+            value = getattr(self, key)
+            if value is not None:
+                m[key] = value
+        return m
 
     def hash(self) -> str:
-        h = hashlib.sha256(self.to_canonical_yaml()).hexdigest()
-        return f"sha256:{h}"
+        """Return the canonical PRML SHA-256 (64 lowercase hex) of this manifest.
+
+        Delegates to ``falsify_prml.manifest_hash`` — identical bytes to the
+        ``falsify`` CLI and all reference implementations.
+        """
+        return _prml.manifest_hash(self.to_dict())
+
+    def to_canonical_yaml(self) -> bytes:
+        """Canonical byte serialisation per PRML v0.1 §4 (via falsify_prml)."""
+        return _prml.canonicalize(self.to_dict()).encode("utf-8")
+
+
+def _manifest_from_fields(fields: dict[str, Any]) -> InspectManifest:
+    """Build an :class:`InspectManifest` from a real PRML v0.1 manifest dict.
+
+    Accepts the nested ``dataset``/``producer`` shape plus the Inspect extra
+    keys. Used when loading a committed manifest off disk.
+    """
+    ds = fields.get("dataset") or {}
+    prod = fields.get("producer") or {}
+    if not isinstance(ds, dict) or not isinstance(prod, dict):
+        raise MalformedLogError(
+            "manifest dataset/producer must be mappings (real PRML v0.1 schema)"
+        )
+    return InspectManifest(
+        metric=fields.get("metric"),
+        comparator=fields.get("comparator"),
+        threshold=fields.get("threshold"),
+        dataset_id=ds.get("id"),
+        dataset_hash=ds.get("hash"),
+        producer_id=prod.get("id"),
+        seed=fields.get("seed"),
+        created_at=fields.get("created_at"),
+        claim_id=fields.get("claim_id"),
+        version=fields.get("version", "prml/0.1"),
+        inspect_task=fields.get("inspect_task"),
+        inspect_scorer=fields.get("inspect_scorer"),
+        sample_size=fields.get("sample_size"),
+    )
 
 
 # -- Public API ----------------------------------------------------------------
@@ -98,46 +176,66 @@ def preregister(
     dataset: str,
     dataset_hash: str,
     model_version: str,
-    sample_size: int,
     seed: int,
+    claim_id: str | None = None,
+    sample_size: int | None = None,
     pre_registered: str | None = None,
     inspect_task: str | None = None,
     inspect_scorer: str | None = None,
     output_path: str | Path | None = None,
 ) -> tuple[str, InspectManifest]:
-    """Create a PRML manifest before running an Inspect eval.
+    """Create a PRML v0.1 manifest before running an Inspect eval.
+
+    ``threshold_direction`` is the adapter-facing name for the PRML
+    ``comparator`` field (kept for backwards-compatible call sites).
+
+    ``dataset_hash`` must be 64 lowercase hex chars (a SHA-256 of the dataset),
+    per PRML v0.1. ``claim_id`` defaults to a value derived from the dataset and
+    metric if not supplied.
 
     Returns:
-        (hash_string, manifest_object) — write the hash into your eval
-        artifact, the manifest can be serialised to YAML and committed.
-    """
-    if pre_registered is None:
-        pre_registered = (
-            _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
-        )
-        # ensure RFC 3339 trailing Z form
-        if pre_registered.endswith("+00:00"):
-            pre_registered = pre_registered[:-6] + "Z"
+        (hash_string, manifest_object) — the hash is the bare 64-hex canonical
+        PRML SHA-256 (no ``sha256:`` prefix). Write it into your eval artifact;
+        the manifest can be serialised to canonical YAML and committed.
 
-    if threshold_direction not in {">=", "<=", ">", "<", "=="}:
+    Raises:
+        ValueError if the resulting manifest is invalid per
+        ``falsify_prml.validate_manifest`` (bad comparator, non-hex dataset
+        hash, control chars, etc.).
+    """
+    if threshold_direction not in _COMPARATORS:
         raise ValueError(
             f"threshold_direction must be one of >= <= > < ==, got {threshold_direction!r}"
         )
 
+    if pre_registered is None:
+        pre_registered = (
+            _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
+        )
+        if pre_registered.endswith("+00:00"):
+            pre_registered = pre_registered[:-6] + "Z"
+
+    if claim_id is None:
+        claim_id = f"{dataset}:{metric}"
+
     manifest = InspectManifest(
         metric=metric,
-        value=None,
-        dataset=dataset,
-        dataset_hash=dataset_hash,
-        model_version=model_version,
+        comparator=threshold_direction,
         threshold=threshold,
-        threshold_direction=threshold_direction,
-        sample_size=sample_size,
+        dataset_id=dataset,
+        dataset_hash=dataset_hash,
+        producer_id=model_version,
         seed=seed,
-        pre_registered=pre_registered,
+        created_at=pre_registered,
+        claim_id=claim_id,
         inspect_task=inspect_task,
         inspect_scorer=inspect_scorer,
+        sample_size=sample_size,
     )
+
+    errors = _prml.validate_manifest(manifest.to_dict())
+    if errors:
+        raise ValueError("invalid PRML manifest: " + "; ".join(errors))
 
     h = manifest.hash()
 
@@ -150,25 +248,26 @@ def preregister(
 def extract_manifest_from_log(log_path: str | Path) -> dict[str, Any]:
     """Extract Inspect AI eval log metadata into a PRML-compatible dict.
 
-    Inspect logs are JSON. The fields we map:
+    Inspect logs are JSON. The fields we map to PRML v0.1 names:
         eval.task           -> inspect_task
-        eval.model          -> model_version
-        eval.dataset.name   -> dataset
-        eval.dataset.sha    -> dataset_hash (when present)
-        results.scores[0].metrics[primary].value -> value
+        eval.model          -> producer_id   (PRML producer.id)
+        eval.dataset.name   -> dataset_id    (PRML dataset.id)
+        eval.dataset.sha    -> dataset_hash  (PRML dataset.hash, when present)
+        results.scores[0].metrics[primary].value -> value (observed)
         eval.config.epochs  -> sample_size (heuristic; user may override)
         eval.config.seed    -> seed
 
     Returns a dict with as many fields populated as the log supplies.
     Missing fields are returned as None — the caller fills them.
     """
+    import json
+
     log_path = Path(log_path)
     if not log_path.exists():
         raise FileNotFoundError(log_path)
 
     raw = json.loads(log_path.read_text(encoding="utf-8"))
 
-    # Inspect log structure (as of inspect_ai v0.3.x)
     eval_block = raw.get("eval", {})
     config = eval_block.get("config", {})
     dataset = eval_block.get("dataset", {})
@@ -181,7 +280,6 @@ def extract_manifest_from_log(log_path: str | Path) -> dict[str, Any]:
         first = scores[0]
         primary_metric = first.get("name") or first.get("scorer")
         metrics = first.get("metrics") or {}
-        # take the first metric in the dict
         for _name, m in metrics.items():
             v = m.get("value") if isinstance(m, dict) else None
             if v is not None:
@@ -190,8 +288,8 @@ def extract_manifest_from_log(log_path: str | Path) -> dict[str, Any]:
 
     return {
         "inspect_task": eval_block.get("task"),
-        "model_version": eval_block.get("model"),
-        "dataset": dataset.get("name"),
+        "producer_id": eval_block.get("model"),
+        "dataset_id": dataset.get("name"),
         "dataset_hash": dataset.get("sha"),
         "metric": primary_metric,
         "value": primary_value,
@@ -207,21 +305,28 @@ def verify_eval_log(
     threshold: float,
     threshold_direction: str,
     pre_registered: str,
+    claim_id: str | None = None,
+    dataset: str | None = None,
+    model_version: str | None = None,
     sample_size: int | None = None,
     seed: int | None = None,
+    inspect_scorer: str | None = None,
 ) -> dict[str, Any]:
     """Reconstruct the pre-registered manifest from log metadata + caller's
-    threshold/seed/etc., then verify the hash matches `expected_hash`.
+    threshold/seed/etc., then verify the hash matches ``expected_hash``.
+
+    The reconstructed manifest must reproduce the exact PRML v0.1 manifest that
+    was locked, so the caller supplies the fields the eval log does not carry
+    (threshold, comparator, created_at/pre_registered, and — because the log has
+    no claim_id — the same ``claim_id`` used at lock, defaulting to
+    ``"{dataset}:{metric}"`` as in :func:`preregister`).
 
     Returns a dict with keys:
-        ok: bool — hash matches and threshold is satisfied
-        hash_match: bool
-        threshold_satisfied: bool
-        observed_value: float | None
-        manifest: dict (the reconstructed manifest)
+        ok, hash_match, threshold_satisfied, observed_value,
+        expected_hash, actual_hash, manifest
 
     Raises:
-        PRMLVerificationError if the log is structurally malformed.
+        MalformedLogError if the log is structurally malformed.
     """
     extracted = extract_manifest_from_log(log_path)
     if not extracted.get("metric"):
@@ -231,40 +336,54 @@ def verify_eval_log(
             "This is not a tamper — it means the log shape is wrong."
         )
 
+    metric = extracted["metric"]
+    dataset_id = dataset if dataset is not None else extracted["dataset_id"]
+    producer_id = (
+        model_version if model_version is not None else extracted["producer_id"]
+    )
     fields = {
-        "metric": extracted["metric"],
-        "dataset": extracted["dataset"],
-        "dataset_hash": extracted["dataset_hash"],
-        "model_version": extracted["model_version"],
+        "metric": metric,
+        "comparator": threshold_direction,
         "threshold": threshold,
-        "threshold_direction": threshold_direction,
-        "sample_size": sample_size or extracted["sample_size"],
+        "dataset_id": dataset_id,
+        "dataset_hash": extracted["dataset_hash"],
+        "producer_id": producer_id,
+        "sample_size": sample_size if sample_size is not None else extracted["sample_size"],
         "seed": seed if seed is not None else extracted["seed"],
-        "pre_registered": pre_registered,
+        "created_at": pre_registered,
+        "claim_id": claim_id if claim_id is not None else f"{dataset_id}:{metric}",
         "inspect_task": extracted["inspect_task"],
+        "inspect_scorer": inspect_scorer,
     }
-    missing = [k for k, v in fields.items() if v is None and k != "inspect_task"]
+    required = ("metric", "dataset_id", "dataset_hash", "producer_id", "seed")
+    missing = [k for k in required if fields[k] is None]
     if missing:
         raise MalformedLogError(
             f"missing fields after extraction: {missing}; supply via kwargs. "
             "This is a structurally invalid log, not a tamper."
         )
 
-    manifest = InspectManifest(value=None, **fields)
+    manifest = InspectManifest(
+        metric=fields["metric"],
+        comparator=fields["comparator"],
+        threshold=fields["threshold"],
+        dataset_id=fields["dataset_id"],
+        dataset_hash=fields["dataset_hash"],
+        producer_id=fields["producer_id"],
+        seed=fields["seed"],
+        created_at=fields["created_at"],
+        claim_id=fields["claim_id"],
+        inspect_task=fields["inspect_task"],
+        inspect_scorer=fields["inspect_scorer"],
+        sample_size=fields["sample_size"],
+    )
     actual_hash = manifest.hash()
     hash_match = actual_hash == expected_hash
 
     observed = extracted.get("value")
     threshold_ok = False
     if observed is not None:
-        ops = {
-            ">=": lambda a, b: a >= b,
-            "<=": lambda a, b: a <= b,
-            ">": lambda a, b: a > b,
-            "<": lambda a, b: a < b,
-            "==": lambda a, b: a == b,
-        }
-        threshold_ok = ops[threshold_direction](observed, threshold)
+        threshold_ok = _prml.evaluate_predicate(observed, threshold_direction, threshold)
 
     return {
         "ok": hash_match and threshold_ok,
@@ -273,40 +392,30 @@ def verify_eval_log(
         "observed_value": observed,
         "expected_hash": expected_hash,
         "actual_hash": actual_hash,
-        "manifest": asdict(manifest),
+        "manifest": manifest.to_dict(),
     }
 
 
 # -- Hook support (in-memory verification) -------------------------------------
 #
 # These helpers exist so the Inspect hook (falsify_inspect.hooks) can verify a
-# live EvalLog object without writing it to disk first. verify_eval_log above is
-# kept untouched (it is the published, file-based path); the logic below is
-# additive.
-
-_OPS = {
-    ">=": lambda a, b: a >= b,
-    "<=": lambda a, b: a <= b,
-    ">": lambda a, b: a > b,
-    "<": lambda a, b: a < b,
-    "==": lambda a, b: a == b,
-}
+# live EvalLog object without writing it to disk first.
 
 
 def load_committed_manifest(path: str | Path) -> tuple[dict[str, Any], str]:
     """Load a pre-registered ``.prml.yaml`` and return ``(fields, hash)``.
 
-    Because the file is the canonical byte form produced by
-    ``InspectManifest.to_canonical_yaml()``, ``sha256(file)`` equals the hash
-    that ``preregister()`` returned at lock time. That is the committed hash.
+    The committed hash is the *canonical* PRML hash of the parsed manifest
+    (``falsify_prml.manifest_hash``), NOT a hash of the raw file bytes. This is
+    the value :func:`preregister` returned at lock time and the value every PRML
+    surface re-derives, so it is robust to incidental file reformatting.
     """
-    raw = Path(path).read_bytes()
-    committed_hash = "sha256:" + hashlib.sha256(raw).hexdigest()
-    fields = yaml.safe_load(raw.decode("utf-8")) or {}
+    fields = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     if not isinstance(fields, dict):
         raise MalformedLogError(
             f"manifest at {path} did not parse to a mapping (got {type(fields).__name__})"
         )
+    committed_hash = _prml.manifest_hash(fields)
     return fields, committed_hash
 
 
@@ -315,45 +424,53 @@ def verify_observation(
     expected_hash: str,
     observed_value: float | None,
     metric: str,
-    dataset: str | None,
+    dataset_id: str | None,
     dataset_hash: str | None,
-    model_version: str | None,
+    producer_id: str | None,
     threshold: float,
-    threshold_direction: str,
-    sample_size: int | None,
+    comparator: str,
     seed: int | None,
-    pre_registered: str,
+    created_at: str,
+    claim_id: str | None = None,
+    sample_size: int | None = None,
     inspect_task: str | None = None,
+    inspect_scorer: str | None = None,
 ) -> dict[str, Any]:
-    """Rebuild a manifest from identity fields + observed value, then return a
-    verdict dict with an explicit ``status`` of PASS / FAIL / TAMPERED.
+    """Rebuild a manifest from PRML v0.1 identity fields + observed value, then
+    return a verdict dict with an explicit ``status`` of PASS / FAIL / TAMPERED.
+
+    Kwargs use the PRML v0.1 vocabulary (``comparator``, ``producer_id``,
+    ``dataset_id``, ``dataset_hash`` -> ``dataset.hash``, ``created_at``).
 
     TAMPERED means the rebuilt hash does not equal ``expected_hash`` (the run's
     identity, e.g. model or dataset, does not match what was pre-registered).
     FAIL means the hash matches but the observed value misses the threshold.
     """
-    if threshold_direction not in _OPS:
+    if comparator not in _COMPARATORS:
         raise ValueError(
-            f"threshold_direction must be one of >= <= > < ==, got {threshold_direction!r}"
+            f"comparator must be one of >= <= > < ==, got {comparator!r}"
         )
+    if claim_id is None:
+        claim_id = f"{dataset_id}:{metric}"
     manifest = InspectManifest(
         metric=metric,
-        value=None,
-        dataset=dataset,
-        dataset_hash=dataset_hash,
-        model_version=model_version,
+        comparator=comparator,
         threshold=threshold,
-        threshold_direction=threshold_direction,
-        sample_size=sample_size,
+        dataset_id=dataset_id,
+        dataset_hash=dataset_hash,
+        producer_id=producer_id,
         seed=seed,
-        pre_registered=pre_registered,
+        created_at=created_at,
+        claim_id=claim_id,
         inspect_task=inspect_task,
+        inspect_scorer=inspect_scorer,
+        sample_size=sample_size,
     )
     actual_hash = manifest.hash()
     hash_match = actual_hash == expected_hash
     threshold_ok = (
         observed_value is not None
-        and _OPS[threshold_direction](observed_value, threshold)
+        and _prml.evaluate_predicate(observed_value, comparator, threshold)
     )
     if not hash_match:
         status = "TAMPERED"
@@ -369,15 +486,8 @@ def verify_observation(
         "observed_value": observed_value,
         "expected_hash": expected_hash,
         "actual_hash": actual_hash,
-        "manifest": asdict(manifest),
+        "manifest": manifest.to_dict(),
     }
-
-
-_MANIFEST_FIELDS = {
-    "metric", "dataset", "dataset_hash", "model_version", "threshold",
-    "threshold_direction", "sample_size", "seed", "pre_registered",
-    "prml_version", "inspect_task", "inspect_scorer",
-}
 
 
 def verify_live(
@@ -391,39 +501,40 @@ def verify_live(
 ) -> dict[str, Any]:
     """Verify a live run against a committed manifest file.
 
-    Loads the pre-registered manifest (its committed hash is ``sha256(file)``),
-    overrides the identity fields the eval run actually used (model, dataset,
-    task) where the caller supplies them, rebuilds the manifest, and compares.
-    A mismatch means the run did not match the pre-registration (TAMPERED);
-    a match with a missed threshold is FAIL; a match that meets it is PASS.
+    Loads the pre-registered manifest (its committed hash is the canonical PRML
+    hash of its contents), overrides the identity fields the eval run actually
+    used (model -> producer.id, dataset -> dataset.id/hash, task ->
+    inspect_task) where the caller supplies them, rebuilds the manifest, and
+    compares. A mismatch means the run did not match the pre-registration
+    (TAMPERED); a match with a missed threshold is FAIL; a match that meets it
+    is PASS.
 
-    All committed fields not supplied by the live run (dataset hash, seed,
-    sample size, scorer, threshold, timestamp) are taken from the manifest as
-    committed, so they do not falsely trigger TAMPERED when the eval log does
-    not expose them.
+    All committed fields not supplied by the live run are taken from the
+    manifest as committed, so they do not falsely trigger TAMPERED when the eval
+    log does not expose them.
     """
     committed, committed_hash = load_committed_manifest(manifest_path)
-    fields = {k: v for k, v in committed.items() if k in _MANIFEST_FIELDS}
-    if live_model is not None:
-        fields["model_version"] = live_model
-    if live_dataset is not None:
-        fields["dataset"] = live_dataset
-    if live_dataset_hash is not None:
-        fields["dataset_hash"] = live_dataset_hash
-    if fields.get("inspect_task") is not None and live_task is not None:
-        fields["inspect_task"] = live_task
+    manifest = _manifest_from_fields(committed)
 
-    manifest = InspectManifest(value=None, **fields)
+    if live_model is not None:
+        manifest.producer_id = live_model
+    if live_dataset is not None:
+        manifest.dataset_id = live_dataset
+    if live_dataset_hash is not None:
+        manifest.dataset_hash = live_dataset_hash
+    if manifest.inspect_task is not None and live_task is not None:
+        manifest.inspect_task = live_task
+
     actual_hash = manifest.hash()
     hash_match = actual_hash == committed_hash
 
-    direction = fields.get("threshold_direction")
-    threshold = fields.get("threshold")
+    comparator = manifest.comparator
+    threshold = manifest.threshold
     threshold_ok = (
         observed_value is not None
-        and direction in _OPS
+        and comparator in _COMPARATORS
         and threshold is not None
-        and _OPS[direction](observed_value, threshold)
+        and _prml.evaluate_predicate(observed_value, comparator, threshold)
     )
     if not hash_match:
         status = "TAMPERED"
@@ -438,8 +549,8 @@ def verify_live(
         "threshold_satisfied": threshold_ok,
         "observed_value": observed_value,
         "threshold": threshold,
-        "threshold_direction": direction,
-        "metric": fields.get("metric"),
+        "comparator": comparator,
+        "metric": manifest.metric,
         "expected_hash": committed_hash,
         "actual_hash": actual_hash,
     }

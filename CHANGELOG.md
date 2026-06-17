@@ -2,6 +2,61 @@
 
 All notable changes to `falsify-inspect` are documented here.
 
+## [0.3.0] — 2026-06-17
+
+### Changed (BREAKING)
+- **Migrated to the real PRML v0.1 manifest schema.** Previous releases used a
+  flat, adapter-private schema (`threshold_direction`, `prml_version`, flat
+  `dataset_hash`, `model_version`, `sample_size`, `pre_registered`). That schema
+  was **not** valid PRML and was rejected by `falsify_prml.validate_manifest`.
+  Manifests now use the nine required PRML v0.1 fields:
+  `version: prml/0.1`, `claim_id`, `created_at`, `metric`, `comparator`,
+  `threshold`, `dataset: {id, hash}`, `seed`, `producer: {id}`.
+
+  Field mapping (adapter-facing arg → PRML field):
+  - `threshold_direction` → `comparator`
+  - `dataset` (name) → `dataset.id`
+  - `dataset_hash` → `dataset.hash` (**must now be 64 lowercase hex**, a real
+    SHA-256; the old `sha256:…` / `hf:…` prefixed forms are no longer valid)
+  - `model_version` → `producer.id`
+  - `pre_registered` → `created_at`
+  - `inspect_task`, `inspect_scorer`, `sample_size` → extra top-level keys
+    (PRML permits extra keys; they are still hashed)
+  - new `claim_id` (defaults to `"<dataset>:<metric>"` if not supplied)
+- **Hashes are now bare 64-char hex** (the canonical PRML SHA-256), not the
+  previous `sha256:<hex>` prefixed form.
+- **`falsify_prml` is now the engine.** The adapter no longer carries its own
+  canonicalization/hashing/validation/predicate logic; all of it is delegated
+  to the published `falsify` package (`falsify_prml.canonicalize`,
+  `manifest_hash`, `validate_manifest`, `evaluate_predicate`). This guarantees
+  byte-identical hashes with the `falsify` CLI and the JS/Go/Rust reference
+  implementations.
+- `load_committed_manifest()` now returns the **canonical** PRML hash of the
+  parsed manifest (re-derivable on any surface), not a hash of the raw file
+  bytes.
+- **Verdict/receipt dicts now use PRML field names.** The verdict returned by
+  `verify_live()` (and written to `*.prml-receipt.json`) no longer carries the
+  legacy `threshold_direction` key — it exposes `comparator` only.
+- **`verify_observation()` kwargs renamed to PRML vocabulary**: `dataset` →
+  `dataset_id`, `model_version` → `producer_id`, `threshold_direction` →
+  `comparator`, `pre_registered` → `created_at` (`dataset_hash` unchanged — it
+  maps to the nested `dataset.hash`). The `preregister()`, `verify_eval_log()`,
+  and `falsify-inspect lock/verify` CLI argument names are unchanged for
+  backward compatibility.
+- `extract_manifest_from_log()` now returns PRML-named keys: `producer_id` (was
+  `model_version`) and `dataset_id` (was `dataset`).
+
+### Added
+- `falsify>=0.3.8` runtime dependency (ships the `falsify_prml` module).
+- `--claim-id` flag on `falsify-inspect lock`.
+
+### Migration
+- Re-lock any pre-existing claims: old `.prml.yaml` files and old hashes are
+  **not** compatible. Recompute the dataset hash as a 64-hex SHA-256 and re-run
+  `falsify-inspect lock`. The hook (`FALSIFY_PRML`, PASS/FAIL/TAMPERED receipt,
+  `FALSIFY_PRML_STRICT`) behaves the same; only the manifest schema underneath
+  changed.
+
 ## [0.2.0] — 2026-06-01
 
 ### Added

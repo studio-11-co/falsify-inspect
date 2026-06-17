@@ -38,6 +38,10 @@ def _run(*args: str, **kw) -> subprocess.CompletedProcess:
     )
 
 
+# A valid PRML dataset.hash (64 lowercase hex).
+HEX = "a" * 64
+
+
 def _lock(tmp_path: Path, **overrides) -> tuple[str, Path]:
     """Run `lock`, return (hash, manifest_path)."""
     out = tmp_path / "claim.prml.yaml"
@@ -46,7 +50,7 @@ def _lock(tmp_path: Path, **overrides) -> tuple[str, Path]:
         "--threshold": "0.95",
         "--threshold-direction": ">=",
         "--dataset": "harmbench-v1",
-        "--dataset-hash": "sha256:abc",
+        "--dataset-hash": HEX,
         "--model-version": "claude-3.5-sonnet@2025-10-01",
         "--sample-size": "500",
         "--seed": "42",
@@ -60,7 +64,8 @@ def _lock(tmp_path: Path, **overrides) -> tuple[str, Path]:
     r = _run("lock", *cli_args)
     assert r.returncode == 0, f"lock failed: {r.stderr}"
     h = r.stdout.strip()
-    assert h.startswith("sha256:"), f"unexpected lock output: {h!r}"
+    # Bare 64-hex canonical PRML hash (no "sha256:" prefix).
+    assert len(h) == 64, f"unexpected lock output: {h!r}"
     return h, out
 
 
@@ -69,7 +74,7 @@ def _log(tmp_path: Path, **fields) -> Path:
         "task": "harmbench",
         "model": "claude-3.5-sonnet@2025-10-01",
         "dataset_name": "harmbench-v1",
-        "dataset_sha": "sha256:abc",
+        "dataset_sha": HEX,
         "epochs": 500,
         "seed": 42,
         "metric": "refusal_rate",
@@ -95,11 +100,11 @@ def _log(tmp_path: Path, **fields) -> Path:
 
 
 def _pre_registered_from_manifest(manifest_path: Path) -> str:
-    # The manifest YAML carries `pre_registered:` — read it back so verify
-    # uses the *same* timestamp lock used (otherwise the hash differs).
+    # The manifest YAML carries `created_at:` (PRML v0.1) — read it back so
+    # verify uses the *same* timestamp lock used (otherwise the hash differs).
     import yaml
     data = yaml.safe_load(manifest_path.read_text())
-    return data["pre_registered"]
+    return data["created_at"]
 
 
 # --- exit-code contract -----------------------------------------------------
@@ -107,7 +112,7 @@ def _pre_registered_from_manifest(manifest_path: Path) -> str:
 
 def test_cli_lock_emits_sha256_hash(tmp_path: Path):
     h, _ = _lock(tmp_path)
-    assert len(h) == len("sha256:") + 64
+    assert len(h) == 64  # bare 64-hex canonical PRML hash
 
 
 def test_cli_verify_pass_exit_0(tmp_path: Path):
@@ -162,7 +167,7 @@ def test_cli_verify_model_drift_exit_3_tamper(tmp_path: Path):
 def test_cli_verify_dataset_drift_exit_3_tamper(tmp_path: Path):
     h, manifest = _lock(tmp_path)
     ts = _pre_registered_from_manifest(manifest)
-    log = _log(tmp_path, dataset_sha="sha256:def")  # tampered dataset hash
+    log = _log(tmp_path, dataset_sha="d" * 64)  # tampered dataset hash (drift)
     r = _run(
         "verify", str(log),
         "--hash", h,
@@ -234,9 +239,11 @@ def test_cli_lock_is_deterministic(tmp_path: Path):
     # here we assert the manifest survives a round-trip.
     import yaml
     data = yaml.safe_load(m1.read_text())
-    # The hash output prefix + length contract is already covered above.
+    # Real PRML v0.1 schema: dataset is nested, comparator replaces direction.
     assert data["metric"] == "refusal_rate"
     assert data["threshold"] == 0.95
     assert data["seed"] == 42
-    assert data["dataset"] == "harmbench-v1"
-    assert h1.startswith("sha256:")
+    assert data["dataset"]["id"] == "harmbench-v1"
+    assert data["comparator"] == ">="
+    assert data["version"] == "prml/0.1"
+    assert len(h1) == 64

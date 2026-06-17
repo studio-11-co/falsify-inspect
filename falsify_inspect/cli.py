@@ -24,6 +24,7 @@ def _cmd_lock(args: argparse.Namespace) -> int:
         model_version=args.model_version,
         sample_size=args.sample_size,
         seed=args.seed,
+        claim_id=args.claim_id,
         inspect_task=args.task,
         inspect_scorer=args.scorer,
         output_path=args.output,
@@ -83,11 +84,12 @@ def main() -> int:
         required=True,
         choices=[">=", "<=", ">", "<", "=="],
     )
-    pl.add_argument("--dataset", required=True)
-    pl.add_argument("--dataset-hash", required=True)
-    pl.add_argument("--model-version", required=True)
-    pl.add_argument("--sample-size", type=int, required=True)
+    pl.add_argument("--dataset", required=True, help="dataset id (PRML dataset.id)")
+    pl.add_argument("--dataset-hash", required=True, help="64 lowercase hex SHA-256 (PRML dataset.hash)")
+    pl.add_argument("--model-version", required=True, help="model id (PRML producer.id)")
+    pl.add_argument("--sample-size", type=int, default=None)
     pl.add_argument("--seed", type=int, required=True)
+    pl.add_argument("--claim-id", default=None, help="PRML claim_id (default: '<dataset>:<metric>')")
     pl.add_argument("--task", default=None, help="Inspect task name (optional)")
     pl.add_argument("--scorer", default=None, help="Inspect scorer name (optional)")
     pl.add_argument("--output", default=None, help="write manifest YAML to path")

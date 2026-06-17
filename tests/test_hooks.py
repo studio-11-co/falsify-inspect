@@ -13,13 +13,16 @@ import pytest
 from falsify_inspect import load_committed_manifest, preregister, verify_live
 
 
+HEX = "c" * 64
+
+
 def _make_manifest(tmp_path, **over):
     kw = dict(
         metric="accuracy",
         threshold=0.85,
         threshold_direction=">=",
         dataset="imagenet-val",
-        dataset_hash="sha256:abc",
+        dataset_hash=HEX,
         model_version="m@1",
         sample_size=100,
         seed=42,
@@ -113,7 +116,11 @@ def test_load_committed_manifest_roundtrip(tmp_path):
     assert committed_hash == h
     assert fields["metric"] == "accuracy"
     assert fields["threshold"] == 0.85
-    assert fields["model_version"] == "m@1"
+    # Real PRML v0.1 nesting: model -> producer.id, comparator, dataset.hash.
+    assert fields["producer"]["id"] == "m@1"
+    assert fields["comparator"] == ">="
+    assert fields["dataset"]["id"] == "imagenet-val"
+    assert fields["dataset"]["hash"] == HEX
 
 
 # -- the Inspect hook (requires inspect_ai) -----------------------------------

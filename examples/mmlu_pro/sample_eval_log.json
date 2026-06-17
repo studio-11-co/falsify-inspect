@@ -3,8 +3,8 @@
     "task": "mmlu_pro_prml",
     "model": "openai/gpt-4o-mini",
     "dataset": {
-      "name": "TIGER-Lab/MMLU-Pro",
-      "sha": "hf:527feea0afed1de15a8c115abf7be4c912123315"
+      "name": "TIGER-Lab/MMLU-Pro@527feea0afed1de15a8c115abf7be4c912123315",
+      "sha": "316be51cdaf3e07bcc17fcabbab88abd7105dd5f96e02534683855fcc8cbc14a"
     },
     "config": {
       "sample_size": 10,

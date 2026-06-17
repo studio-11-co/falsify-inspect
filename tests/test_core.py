@@ -1,17 +1,21 @@
-"""Tests for falsify_inspect.core."""
+"""Tests for falsify_inspect.core (real PRML v0.1 schema, via falsify_prml)."""
 
 import json
 from pathlib import Path
 
+import falsify_prml as prml
 import pytest
 
 from falsify_inspect import (
     InspectManifest,
-    PRMLVerificationError,
     extract_manifest_from_log,
     preregister,
     verify_eval_log,
 )
+
+# A valid PRML dataset.hash: 64 lowercase hex chars.
+HEX = "a" * 64
+HEX2 = "b" * 64
 
 
 def test_preregister_returns_hash_and_manifest():
@@ -20,16 +24,34 @@ def test_preregister_returns_hash_and_manifest():
         threshold=0.95,
         threshold_direction=">=",
         dataset="harmbench-v1",
-        dataset_hash="sha256:abc",
+        dataset_hash=HEX,
         model_version="claude-3.5-sonnet",
         sample_size=500,
         seed=42,
         pre_registered="2026-05-08T20:00:00Z",
     )
-    assert h.startswith("sha256:")
-    assert len(h) == len("sha256:") + 64
+    # Bare 64-hex canonical PRML hash (no "sha256:" prefix).
+    assert len(h) == 64
+    assert all(c in "0123456789abcdef" for c in h)
     assert isinstance(m, InspectManifest)
     assert m.metric == "refusal_rate"
+    assert m.comparator == ">="
+
+
+def test_preregister_matches_falsify_prml():
+    """The adapter's hash must equal falsify_prml.manifest_hash of the manifest."""
+    h, m = preregister(
+        metric="acc",
+        threshold=0.5,
+        threshold_direction=">=",
+        dataset="d",
+        dataset_hash=HEX,
+        model_version="m",
+        seed=1,
+        pre_registered="2026-01-01T00:00:00Z",
+    )
+    assert h == prml.manifest_hash(m.to_dict())
+    assert prml.validate_manifest(m.to_dict()) == []
 
 
 def test_preregister_deterministic():
@@ -38,7 +60,7 @@ def test_preregister_deterministic():
         threshold=0.5,
         threshold_direction=">=",
         dataset="d",
-        dataset_hash="sha256:0",
+        dataset_hash=HEX,
         model_version="m",
         sample_size=100,
         seed=1,
@@ -54,7 +76,7 @@ def test_preregister_changes_when_threshold_changes():
         metric="acc",
         threshold_direction=">=",
         dataset="d",
-        dataset_hash="sha256:0",
+        dataset_hash=HEX,
         model_version="m",
         sample_size=100,
         seed=1,
@@ -72,9 +94,23 @@ def test_invalid_threshold_direction():
             threshold=0.5,
             threshold_direction="≥",  # unicode not allowed
             dataset="d",
-            dataset_hash="sha256:0",
+            dataset_hash=HEX,
             model_version="m",
             sample_size=1,
+            seed=0,
+        )
+
+
+def test_invalid_dataset_hash_rejected():
+    """A non-hex dataset hash must be rejected by falsify_prml validation."""
+    with pytest.raises(ValueError):
+        preregister(
+            metric="m",
+            threshold=0.5,
+            threshold_direction=">=",
+            dataset="d",
+            dataset_hash="sha256:not-hex",
+            model_version="m",
             seed=0,
         )
 
@@ -84,7 +120,7 @@ def test_extract_manifest_from_log(tmp_path: Path):
         "eval": {
             "task": "harmbench",
             "model": "claude-3.5-sonnet@2025-10-01",
-            "dataset": {"name": "harmbench-v1", "sha": "sha256:abc"},
+            "dataset": {"name": "harmbench-v1", "sha": HEX},
             "config": {"epochs": 500, "seed": 42},
         },
         "results": {
@@ -99,11 +135,31 @@ def test_extract_manifest_from_log(tmp_path: Path):
     p = tmp_path / "eval.json"
     p.write_text(json.dumps(log))
     out = extract_manifest_from_log(p)
-    assert out["dataset"] == "harmbench-v1"
-    assert out["model_version"] == "claude-3.5-sonnet@2025-10-01"
+    assert out["dataset_id"] == "harmbench-v1"
+    assert out["producer_id"] == "claude-3.5-sonnet@2025-10-01"
     assert out["value"] == 0.97
     assert out["sample_size"] == 500
     assert out["seed"] == 42
+
+
+def _matching_log(tmp_path: Path, *, value: float, model="claude-3.5-sonnet@2025-10-01",
+                  dataset="harmbench-v1", sha=HEX, seed=42, epochs=500, task="harmbench") -> Path:
+    log = {
+        "eval": {
+            "task": task,
+            "model": model,
+            "dataset": {"name": dataset, "sha": sha},
+            "config": {"epochs": epochs, "seed": seed},
+        },
+        "results": {
+            "scores": [
+                {"name": "refusal_rate", "metrics": {"refusal_rate": {"value": value}}}
+            ]
+        },
+    }
+    p = tmp_path / "eval.json"
+    p.write_text(json.dumps(log))
+    return p
 
 
 def test_verify_eval_log_pass(tmp_path: Path):
@@ -112,30 +168,14 @@ def test_verify_eval_log_pass(tmp_path: Path):
         threshold=0.95,
         threshold_direction=">=",
         dataset="harmbench-v1",
-        dataset_hash="sha256:abc",
+        dataset_hash=HEX,
         model_version="claude-3.5-sonnet@2025-10-01",
         sample_size=500,
         seed=42,
         pre_registered="2026-05-08T20:00:00Z",
         inspect_task="harmbench",
     )
-
-    log = {
-        "eval": {
-            "task": "harmbench",
-            "model": "claude-3.5-sonnet@2025-10-01",
-            "dataset": {"name": "harmbench-v1", "sha": "sha256:abc"},
-            "config": {"epochs": 500, "seed": 42},
-        },
-        "results": {
-            "scores": [
-                {"name": "refusal_rate", "metrics": {"refusal_rate": {"value": 0.97}}}
-            ]
-        },
-    }
-    p = tmp_path / "eval.json"
-    p.write_text(json.dumps(log))
-
+    p = _matching_log(tmp_path, value=0.97)
     r = verify_eval_log(
         p,
         expected_hash=h,
@@ -154,26 +194,16 @@ def test_verify_eval_log_threshold_fail(tmp_path: Path):
         threshold=0.95,
         threshold_direction=">=",
         dataset="d",
-        dataset_hash="sha256:0",
+        dataset_hash=HEX,
         model_version="m",
         sample_size=10,
         seed=1,
         pre_registered="2026-01-01T00:00:00Z",
         inspect_task="t",
     )
-    log = {
-        "eval": {
-            "task": "t",
-            "model": "m",
-            "dataset": {"name": "d", "sha": "sha256:0"},
-            "config": {"epochs": 10, "seed": 1},
-        },
-        "results": {
-            "scores": [{"name": "refusal_rate", "metrics": {"refusal_rate": {"value": 0.50}}}]
-        },
-    }
-    p = tmp_path / "eval.json"
-    p.write_text(json.dumps(log))
+    p = _matching_log(
+        tmp_path, value=0.50, model="m", dataset="d", sha=HEX, seed=1, epochs=10, task="t"
+    )
     r = verify_eval_log(
         p, expected_hash=h, threshold=0.95, threshold_direction=">=",
         pre_registered="2026-01-01T00:00:00Z",
@@ -190,26 +220,16 @@ def test_verify_eval_log_tamper(tmp_path: Path):
         threshold=0.95,
         threshold_direction=">=",
         dataset="d",
-        dataset_hash="sha256:0",
+        dataset_hash=HEX,
         model_version="m",
         sample_size=10,
         seed=1,
         pre_registered="2026-01-01T00:00:00Z",
         inspect_task="t",
     )
-    log = {
-        "eval": {
-            "task": "t",
-            "model": "m_changed",  # tampered
-            "dataset": {"name": "d", "sha": "sha256:0"},
-            "config": {"epochs": 10, "seed": 1},
-        },
-        "results": {
-            "scores": [{"name": "refusal_rate", "metrics": {"refusal_rate": {"value": 0.97}}}]
-        },
-    }
-    p = tmp_path / "eval.json"
-    p.write_text(json.dumps(log))
+    p = _matching_log(
+        tmp_path, value=0.97, model="m_changed", dataset="d", sha=HEX, seed=1, epochs=10, task="t"
+    )
     r = verify_eval_log(
         p, expected_hash=h, threshold=0.95, threshold_direction=">=",
         pre_registered="2026-01-01T00:00:00Z",

@@ -1,11 +1,15 @@
-dataset: TIGER-Lab/MMLU-Pro
-dataset_hash: hf:527feea0afed1de15a8c115abf7be4c912123315
+claim_id: TIGER-Lab/MMLU-Pro:accuracy
+comparator: '>='
+created_at: '2026-05-16T00:00:00Z'
+dataset:
+  hash: 316be51cdaf3e07bcc17fcabbab88abd7105dd5f96e02534683855fcc8cbc14a
+  id: TIGER-Lab/MMLU-Pro@527feea0afed1de15a8c115abf7be4c912123315
+inspect_scorer: choice
 inspect_task: mmlu_pro_prml
 metric: accuracy
-model_version: openai/gpt-4o-mini
-pre_registered: '2026-05-16T00:00:00Z'
-prml_version: '0.1'
+producer:
+  id: openai/gpt-4o-mini
 sample_size: 10
 seed: 42
 threshold: 0.75
-threshold_direction: '>='
+version: prml/0.1

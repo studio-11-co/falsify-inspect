@@ -139,7 +139,7 @@ class FalsifyHooks(Hooks):
         msg = (
             f"PRML {status} for task={task!r} metric={verdict.get('metric')!r} "
             f"observed={verdict.get('observed_value')} "
-            f"{verdict.get('threshold_direction')} {verdict.get('threshold')} "
+            f"{verdict.get('comparator')} {verdict.get('threshold')} "
             f"(hash_match={verdict['hash_match']})"
         )
         if status == "PASS":
