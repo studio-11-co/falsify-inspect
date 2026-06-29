@@ -1,0 +1,2 @@
+inspect_ai>=0.3
+falsify-inspect>=0.3
