@@ -12,6 +12,7 @@ from falsify_inspect import (
     preregister,
     verify_eval_log,
 )
+from falsify_inspect.core import MalformedLogError
 
 # A valid PRML dataset.hash: 64 lowercase hex chars.
 HEX = "a" * 64
@@ -236,3 +237,58 @@ def test_verify_eval_log_tamper(tmp_path: Path):
     )
     assert r["hash_match"] is False
     assert r["ok"] is False
+
+
+def _log_no_sha(tmp_path: Path, *, value: float, model="m", dataset="d", seed=1,
+                epochs=10, task="t", scorer="match") -> Path:
+    """A log shaped like CURRENT Inspect (0.3.x): no dataset.sha, and the scorer
+    name -- not the metric -- in results.scores[].name."""
+    log = {
+        "eval": {
+            "task": task,
+            "model": model,
+            "dataset": {"name": dataset},  # note: no "sha"
+            "config": {"epochs": epochs, "seed": seed},
+        },
+        "results": {"scores": [{"name": scorer, "metrics": {"accuracy": {"value": value}}}]},
+    }
+    p = tmp_path / "eval_nosha.json"
+    p.write_text(json.dumps(log))
+    return p
+
+
+def test_verify_eval_log_dataset_hash_and_metric_override(tmp_path: Path):
+    """Current Inspect logs omit dataset.sha and carry the scorer name, not the
+    metric. Supplying dataset_hash= and metric= reconstructs the locked manifest."""
+    h, _ = preregister(
+        metric="accuracy", threshold=0.75, threshold_direction=">=",
+        dataset="d", dataset_hash=HEX, model_version="m", sample_size=10, seed=1,
+        pre_registered="2026-01-01T00:00:00Z", inspect_task="t",
+    )
+    p = _log_no_sha(tmp_path, value=0.80, scorer="match")
+    r = verify_eval_log(
+        p, expected_hash=h, threshold=0.75, threshold_direction=">=",
+        pre_registered="2026-01-01T00:00:00Z",
+        dataset="d", dataset_hash=HEX, metric="accuracy", model_version="m",
+        sample_size=10, seed=1,
+    )
+    assert r["hash_match"] is True
+    assert r["threshold_satisfied"] is True
+    assert r["ok"] is True
+
+
+def test_verify_eval_log_missing_dataset_hash_errors(tmp_path: Path):
+    """No dataset.sha in the log and no dataset_hash= override -> helpful error,
+    not a crash and not a false TAMPERED."""
+    h, _ = preregister(
+        metric="accuracy", threshold=0.75, threshold_direction=">=",
+        dataset="d", dataset_hash=HEX, model_version="m", sample_size=10, seed=1,
+        pre_registered="2026-01-01T00:00:00Z", inspect_task="t",
+    )
+    p = _log_no_sha(tmp_path, value=0.80)
+    with pytest.raises(MalformedLogError, match="dataset_hash"):
+        verify_eval_log(
+            p, expected_hash=h, threshold=0.75, threshold_direction=">=",
+            pre_registered="2026-01-01T00:00:00Z",
+            dataset="d", metric="accuracy", model_version="m", seed=1,
+        )

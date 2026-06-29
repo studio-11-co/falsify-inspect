@@ -2,6 +2,22 @@
 
 All notable changes to `falsify-inspect` are documented here.
 
+## [0.3.1] — 2026-06-29
+
+### Fixed
+- **`verify_eval_log` now works against current Inspect logs.** Inspect 0.3.x no
+  longer records `eval.dataset.sha`, and `results.scores[].name` carries the
+  *scorer* name, not the metric. The from-log path raised `MalformedLogError`
+  (`missing fields: ['dataset_hash']`) on every modern log. `verify_eval_log`
+  now accepts `dataset_hash=` and `metric=` overrides (both default to whatever
+  the log carries, so older logs are unaffected), and the error message names
+  exactly which fields to supply. Round-trip with `preregister` is verified.
+
+### Added
+- `examples/offline-mockllm/` — a fully offline, deterministic showcase that
+  runs a real Inspect eval with `mockllm` (no API key, no network), pre-registers
+  the claim, and demonstrates PASS plus a TAMPERED model-swap via `verify_live`.
+
 ## [0.3.0] — 2026-06-17
 
 ### Changed (BREAKING)

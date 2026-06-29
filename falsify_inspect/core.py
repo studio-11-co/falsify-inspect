@@ -311,6 +311,8 @@ def verify_eval_log(
     sample_size: int | None = None,
     seed: int | None = None,
     inspect_scorer: str | None = None,
+    dataset_hash: str | None = None,
+    metric: str | None = None,
 ) -> dict[str, Any]:
     """Reconstruct the pre-registered manifest from log metadata + caller's
     threshold/seed/etc., then verify the hash matches ``expected_hash``.
@@ -321,6 +323,12 @@ def verify_eval_log(
     no claim_id — the same ``claim_id`` used at lock, defaulting to
     ``"{dataset}:{metric}"`` as in :func:`preregister`).
 
+    Current Inspect logs do not record ``eval.dataset.sha`` (and the scorer name,
+    not the metric, is what lands in ``results.scores[].name``). Pass
+    ``dataset_hash=`` and ``metric=`` to supply what the log omits; both default
+    to whatever the log does carry, so logs that include those fields keep
+    working unchanged.
+
     Returns a dict with keys:
         ok, hash_match, threshold_satisfied, observed_value,
         expected_hash, actual_hash, manifest
@@ -329,14 +337,12 @@ def verify_eval_log(
         MalformedLogError if the log is structurally malformed.
     """
     extracted = extract_manifest_from_log(log_path)
-    if not extracted.get("metric"):
+    metric = metric if metric is not None else extracted.get("metric")
+    if not metric:
         raise MalformedLogError(
-            f"could not extract primary metric from log {log_path}: "
-            "the log is structurally invalid (no `results.scores[].name`). "
-            "This is not a tamper — it means the log shape is wrong."
+            f"could not determine the metric for log {log_path}: the log has no "
+            "`results.scores[].name` and no `metric=` override was supplied."
         )
-
-    metric = extracted["metric"]
     dataset_id = dataset if dataset is not None else extracted["dataset_id"]
     producer_id = (
         model_version if model_version is not None else extracted["producer_id"]
@@ -346,7 +352,7 @@ def verify_eval_log(
         "comparator": threshold_direction,
         "threshold": threshold,
         "dataset_id": dataset_id,
-        "dataset_hash": extracted["dataset_hash"],
+        "dataset_hash": dataset_hash if dataset_hash is not None else extracted["dataset_hash"],
         "producer_id": producer_id,
         "sample_size": sample_size if sample_size is not None else extracted["sample_size"],
         "seed": seed if seed is not None else extracted["seed"],
@@ -359,8 +365,10 @@ def verify_eval_log(
     missing = [k for k in required if fields[k] is None]
     if missing:
         raise MalformedLogError(
-            f"missing fields after extraction: {missing}; supply via kwargs. "
-            "This is a structurally invalid log, not a tamper."
+            "the log does not carry these fields and no override was supplied: "
+            f"{missing}. Current Inspect logs omit dataset.sha, so pass "
+            "dataset_hash= (and dataset=/seed=/model_version=/metric= as needed). "
+            "This is a missing field, not a tamper."
         )
 
     manifest = InspectManifest(
