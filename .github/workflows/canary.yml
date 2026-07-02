@@ -1,0 +1,33 @@
+# Canary: does the LATEST inspect_ai release still work with our adapter?
+# Weekly + manual. Failure = the host SDK moved under us (the verify_eval_log
+# class of breakage) — fix before a user or host hits it.
+name: canary (latest inspect_ai)
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"   # Mondays 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install adapter + LATEST host SDK (unpinned)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+          python -m pip install --upgrade inspect_ai
+          python -c "import inspect_ai; print('inspect_ai', inspect_ai.__version__)"
+      - name: Test suite against latest inspect_ai
+        run: python -m pytest tests/ -q
+      - name: Offline showcase end-to-end (real eval, mockllm)
+        run: |
+          cd examples/offline-mockllm
+          python run_showcase.py
