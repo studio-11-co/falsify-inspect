@@ -24,6 +24,8 @@ def test_verify_malformed_json_exits_2_without_traceback(tmp_path: Path):
             ">=",
             "--pre-registered",
             "2026-01-01T00:00:00Z",
+            "--claim-id",
+            "01920000-0000-7000-8000-000000000042",
         ],
         capture_output=True,
         text=True,

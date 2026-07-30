@@ -50,7 +50,7 @@ from falsify_inspect.core import (
 # importable without it. Inspect loads the hook via the `inspect_ai` entry
 # point (falsify_inspect._registry).
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 __all__ = [
     "preregister",

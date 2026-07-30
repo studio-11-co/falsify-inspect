@@ -2,6 +2,26 @@
 
 All notable changes to `falsify-inspect` are documented here.
 
+## [0.4.0] — 2026-07-30
+
+### Changed (breaking)
+- **Manifests now conform to the published PRML v0.1 JSON Schema.** falsify
+  0.3.12 aligned all validators with the published schema
+  (`additionalProperties: false`, UUIDv7 `claim_id`), which made 0.3.x
+  manifests fail validation. Two changes restore conformance:
+  - `claim_id` defaults to a generated **UUIDv7** (was `"<dataset>:<metric>"`,
+    which the schema rejects). Custom claim_ids must be UUIDv7.
+  - Inspect context (`inspect_task`, `inspect_scorer`, `sample_size`) rides
+    under **`metric_args`** instead of as top-level keys.
+- **`verify_eval_log` / `falsify-inspect verify` now require `claim_id`**
+  (UUIDv7s are random, so the verify side can no longer re-derive the lock's
+  claim_id from the log). Pass the claim_id from the locked manifest;
+  `--claim-id` is required on the CLI.
+- Hashes of manifests produced by 0.3.x do not match 0.4.0 output (field
+  layout changed). Locks made with 0.3.x still verify with 0.3.x semantics;
+  re-lock to move to conforming manifests.
+- Minimum `falsify` dependency is now 0.3.12.
+
 ## [0.3.1] — 2026-06-29
 
 ### Fixed

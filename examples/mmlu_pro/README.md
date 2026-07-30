@@ -55,7 +55,7 @@ falsify-inspect lock \
 The checked-in manifest hashes (canonical PRML SHA-256) to:
 
 ```text
-475c25dc2f7e4a268bd502ecb4e668bf04638a285e7d1d3350581d6ce55d7759
+d4a0654963f05945142f23456b455e629024b7dcfcd82c8c78b2d0ed97e1160f
 ```
 
 You can re-derive it with the `falsify` reference CLI: `falsify hash

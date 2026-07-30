@@ -20,7 +20,7 @@ from falsify_inspect import verify_live
 HERE = Path(__file__).resolve().parent
 # Canonical PRML v0.1 hash of claim.prml.yaml (re-derivable with
 # `falsify hash claim.prml.yaml` or falsify_prml.manifest_hash(<parsed yaml>)).
-EXPECTED_HASH = "475c25dc2f7e4a268bd502ecb4e668bf04638a285e7d1d3350581d6ce55d7759"
+EXPECTED_HASH = "d4a0654963f05945142f23456b455e629024b7dcfcd82c8c78b2d0ed97e1160f"
 
 
 def verify() -> dict[str, Any]:

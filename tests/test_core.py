@@ -66,6 +66,7 @@ def test_preregister_deterministic():
         sample_size=100,
         seed=1,
         pre_registered="2026-01-01T00:00:00Z",
+        claim_id="01920000-0000-7000-8000-000000000042",
     )
     h1, _ = preregister(**kw)
     h2, _ = preregister(**kw)
@@ -164,7 +165,7 @@ def _matching_log(tmp_path: Path, *, value: float, model="claude-3.5-sonnet@2025
 
 
 def test_verify_eval_log_pass(tmp_path: Path):
-    h, _ = preregister(
+    h, m = preregister(
         metric="refusal_rate",
         threshold=0.95,
         threshold_direction=">=",
@@ -183,6 +184,7 @@ def test_verify_eval_log_pass(tmp_path: Path):
         threshold=0.95,
         threshold_direction=">=",
         pre_registered="2026-05-08T20:00:00Z",
+     claim_id=m.claim_id,
     )
     assert r["hash_match"] is True
     assert r["threshold_satisfied"] is True
@@ -190,7 +192,7 @@ def test_verify_eval_log_pass(tmp_path: Path):
 
 
 def test_verify_eval_log_threshold_fail(tmp_path: Path):
-    h, _ = preregister(
+    h, m = preregister(
         metric="refusal_rate",
         threshold=0.95,
         threshold_direction=">=",
@@ -207,7 +209,7 @@ def test_verify_eval_log_threshold_fail(tmp_path: Path):
     )
     r = verify_eval_log(
         p, expected_hash=h, threshold=0.95, threshold_direction=">=",
-        pre_registered="2026-01-01T00:00:00Z",
+        pre_registered="2026-01-01T00:00:00Z", claim_id=m.claim_id,
     )
     assert r["hash_match"] is True
     assert r["threshold_satisfied"] is False
@@ -216,7 +218,7 @@ def test_verify_eval_log_threshold_fail(tmp_path: Path):
 
 def test_verify_eval_log_tamper(tmp_path: Path):
     """If anything in the manifest fields differs from pre-registration, hash breaks."""
-    h, _ = preregister(
+    h, m = preregister(
         metric="refusal_rate",
         threshold=0.95,
         threshold_direction=">=",
@@ -233,7 +235,7 @@ def test_verify_eval_log_tamper(tmp_path: Path):
     )
     r = verify_eval_log(
         p, expected_hash=h, threshold=0.95, threshold_direction=">=",
-        pre_registered="2026-01-01T00:00:00Z",
+        pre_registered="2026-01-01T00:00:00Z", claim_id=m.claim_id,
     )
     assert r["hash_match"] is False
     assert r["ok"] is False
@@ -260,7 +262,7 @@ def _log_no_sha(tmp_path: Path, *, value: float, model="m", dataset="d", seed=1,
 def test_verify_eval_log_dataset_hash_and_metric_override(tmp_path: Path):
     """Current Inspect logs omit dataset.sha and carry the scorer name, not the
     metric. Supplying dataset_hash= and metric= reconstructs the locked manifest."""
-    h, _ = preregister(
+    h, m = preregister(
         metric="accuracy", threshold=0.75, threshold_direction=">=",
         dataset="d", dataset_hash=HEX, model_version="m", sample_size=10, seed=1,
         pre_registered="2026-01-01T00:00:00Z", inspect_task="t",
@@ -271,6 +273,7 @@ def test_verify_eval_log_dataset_hash_and_metric_override(tmp_path: Path):
         pre_registered="2026-01-01T00:00:00Z",
         dataset="d", dataset_hash=HEX, metric="accuracy", model_version="m",
         sample_size=10, seed=1,
+     claim_id=m.claim_id,
     )
     assert r["hash_match"] is True
     assert r["threshold_satisfied"] is True
@@ -280,7 +283,7 @@ def test_verify_eval_log_dataset_hash_and_metric_override(tmp_path: Path):
 def test_verify_eval_log_missing_dataset_hash_errors(tmp_path: Path):
     """No dataset.sha in the log and no dataset_hash= override -> helpful error,
     not a crash and not a false TAMPERED."""
-    h, _ = preregister(
+    h, m = preregister(
         metric="accuracy", threshold=0.75, threshold_direction=">=",
         dataset="d", dataset_hash=HEX, model_version="m", sample_size=10, seed=1,
         pre_registered="2026-01-01T00:00:00Z", inspect_task="t",
@@ -291,4 +294,5 @@ def test_verify_eval_log_missing_dataset_hash_errors(tmp_path: Path):
             p, expected_hash=h, threshold=0.75, threshold_direction=">=",
             pre_registered="2026-01-01T00:00:00Z",
             dataset="d", metric="accuracy", model_version="m", seed=1,
-        )
+         claim_id=m.claim_id,
+    )

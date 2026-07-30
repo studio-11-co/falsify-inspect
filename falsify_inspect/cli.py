@@ -43,6 +43,7 @@ def _cmd_verify(args: argparse.Namespace) -> int:
             threshold=args.threshold,
             threshold_direction=args.threshold_direction,
             pre_registered=args.pre_registered,
+            claim_id=args.claim_id,
             sample_size=args.sample_size,
             seed=args.seed,
         )
@@ -89,7 +90,7 @@ def main() -> int:
     pl.add_argument("--model-version", required=True, help="model id (PRML producer.id)")
     pl.add_argument("--sample-size", type=int, default=None)
     pl.add_argument("--seed", type=int, required=True)
-    pl.add_argument("--claim-id", default=None, help="PRML claim_id (default: '<dataset>:<metric>')")
+    pl.add_argument("--claim-id", default=None, help="PRML claim_id, a UUIDv7 (default: generated)")
     pl.add_argument("--task", default=None, help="Inspect task name (optional)")
     pl.add_argument("--scorer", default=None, help="Inspect scorer name (optional)")
     pl.add_argument("--output", default=None, help="write manifest YAML to path")
@@ -105,6 +106,7 @@ def main() -> int:
         choices=[">=", "<=", ">", "<", "=="],
     )
     pv.add_argument("--pre-registered", required=True, help="RFC 3339 timestamp from lock")
+    pv.add_argument("--claim-id", required=True, help="claim_id from the locked manifest (UUIDv7; not derivable from the log)")
     pv.add_argument("--sample-size", type=int, default=None)
     pv.add_argument("--seed", type=int, default=None)
     pv.set_defaults(func=_cmd_verify)

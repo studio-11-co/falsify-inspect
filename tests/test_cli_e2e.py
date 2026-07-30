@@ -107,6 +107,12 @@ def _pre_registered_from_manifest(manifest_path: Path) -> str:
     return data["created_at"]
 
 
+def _claim_id_from_manifest(manifest_path: Path) -> str:
+    # claim_ids are UUIDv7 (random) since 0.4.0 — read the locked value back.
+    import yaml
+    return yaml.safe_load(manifest_path.read_text())["claim_id"]
+
+
 # --- exit-code contract -----------------------------------------------------
 
 
@@ -124,7 +130,7 @@ def test_cli_verify_pass_exit_0(tmp_path: Path):
         "--hash", h,
         "--threshold", "0.95",
         "--threshold-direction", ">=",
-        "--pre-registered", ts,
+        "--pre-registered", ts, "--claim-id", _claim_id_from_manifest(manifest),
     )
     assert r.returncode == 0, f"expected 0, got {r.returncode}\nstdout={r.stdout}\nstderr={r.stderr}"
     body = json.loads(r.stdout)
@@ -142,7 +148,7 @@ def test_cli_verify_threshold_fail_exit_10(tmp_path: Path):
         "--hash", h,
         "--threshold", "0.95",
         "--threshold-direction", ">=",
-        "--pre-registered", ts,
+        "--pre-registered", ts, "--claim-id", _claim_id_from_manifest(manifest),
     )
     assert r.returncode == 10, f"expected 10, got {r.returncode}\nstderr={r.stderr}"
     body = json.loads(r.stdout)
@@ -159,7 +165,7 @@ def test_cli_verify_model_drift_exit_3_tamper(tmp_path: Path):
         "--hash", h,
         "--threshold", "0.95",
         "--threshold-direction", ">=",
-        "--pre-registered", ts,
+        "--pre-registered", ts, "--claim-id", _claim_id_from_manifest(manifest),
     )
     assert r.returncode == 3, f"expected 3, got {r.returncode}\nstderr={r.stderr}"
 
@@ -173,7 +179,7 @@ def test_cli_verify_dataset_drift_exit_3_tamper(tmp_path: Path):
         "--hash", h,
         "--threshold", "0.95",
         "--threshold-direction", ">=",
-        "--pre-registered", ts,
+        "--pre-registered", ts, "--claim-id", _claim_id_from_manifest(manifest),
     )
     assert r.returncode == 3, f"expected 3 (tamper), got {r.returncode}\nstderr={r.stderr}"
 
@@ -187,7 +193,7 @@ def test_cli_verify_seed_drift_exit_3_tamper(tmp_path: Path):
         "--hash", h,
         "--threshold", "0.95",
         "--threshold-direction", ">=",
-        "--pre-registered", ts,
+        "--pre-registered", ts, "--claim-id", _claim_id_from_manifest(manifest),
     )
     assert r.returncode == 3, f"expected 3 (tamper), got {r.returncode}\nstderr={r.stderr}"
 
@@ -207,7 +213,7 @@ def test_cli_verify_missing_metric_field_exit_2_not_3(tmp_path: Path):
         "--hash", h,
         "--threshold", "0.95",
         "--threshold-direction", ">=",
-        "--pre-registered", ts,
+        "--pre-registered", ts, "--claim-id", _claim_id_from_manifest(manifest),
     )
     assert r.returncode == 2, f"expected 2 (malformed), got {r.returncode}\nstderr={r.stderr}"
     assert "structurally invalid" in r.stderr.lower()
@@ -223,7 +229,7 @@ def test_cli_verify_missing_log_exit_2(tmp_path: Path):
         "--hash", h,
         "--threshold", "0.95",
         "--threshold-direction", ">=",
-        "--pre-registered", ts,
+        "--pre-registered", ts, "--claim-id", _claim_id_from_manifest(manifest),
     )
     assert r.returncode == 2, f"expected 2 (io), got {r.returncode}\nstderr={r.stderr}"
 

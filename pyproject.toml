@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "falsify-inspect"
-version = "0.3.1"
+version = "0.4.0"
 description = "PRML v0.1 pre-registration integration for Inspect AI eval logs"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,7 +26,7 @@ classifiers = [
   "Topic :: Software Development :: Testing",
 ]
 dependencies = [
-  "falsify>=0.3.8",
+  "falsify>=0.3.12",
   "pyyaml>=6.0",
 ]
 

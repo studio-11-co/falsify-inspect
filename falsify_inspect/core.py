@@ -61,6 +61,23 @@ _COMPARATORS = {">=", "<=", ">", "<", "=="}
 _EXTRA_KEYS = ("inspect_task", "inspect_scorer", "sample_size")
 
 
+def _uuid7() -> str:
+    """Generate a UUIDv7 (RFC 9562): 48-bit unix-ms timestamp + random.
+
+    PRML v0.1 requires claim_id to be a UUIDv7; stdlib uuid grows uuid7()
+    only in 3.14, so generate one here.
+    """
+    import os as _os
+    import time as _time
+
+    ms = int(_time.time() * 1000) & ((1 << 48) - 1)
+    rand_a = int.from_bytes(_os.urandom(2), "big") & 0x0FFF
+    rand_b = int.from_bytes(_os.urandom(8), "big") & ((1 << 62) - 1)
+    value = (ms << 80) | (0x7 << 76) | (rand_a << 64) | (0b10 << 62) | rand_b
+    h = f"{value:032x}"
+    return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
+
 # -- Data class ----------------------------------------------------------------
 
 
@@ -117,10 +134,12 @@ class InspectManifest:
             "seed": self.seed,
             "producer": {"id": self.producer_id},
         }
-        for key in _EXTRA_KEYS:
-            value = getattr(self, key)
-            if value is not None:
-                m[key] = value
+        # Inspect context rides under metric_args (a spec §5 field): PRML v0.1's
+        # published schema is additionalProperties: false at the top level, so
+        # extra top-level keys would make the manifest non-conforming.
+        extras = {k: getattr(self, k) for k in _EXTRA_KEYS if getattr(self, k) is not None}
+        if extras:
+            m["metric_args"] = extras
         return m
 
     def hash(self) -> str:
@@ -159,9 +178,9 @@ def _manifest_from_fields(fields: dict[str, Any]) -> InspectManifest:
         created_at=fields.get("created_at"),
         claim_id=fields.get("claim_id"),
         version=fields.get("version", "prml/0.1"),
-        inspect_task=fields.get("inspect_task"),
-        inspect_scorer=fields.get("inspect_scorer"),
-        sample_size=fields.get("sample_size"),
+        inspect_task=(fields.get("metric_args") or {}).get("inspect_task", fields.get("inspect_task")),
+        inspect_scorer=(fields.get("metric_args") or {}).get("inspect_scorer", fields.get("inspect_scorer")),
+        sample_size=(fields.get("metric_args") or {}).get("sample_size", fields.get("sample_size")),
     )
 
 
@@ -216,7 +235,7 @@ def preregister(
             pre_registered = pre_registered[:-6] + "Z"
 
     if claim_id is None:
-        claim_id = f"{dataset}:{metric}"
+        claim_id = _uuid7()
 
     manifest = InspectManifest(
         metric=metric,
@@ -320,8 +339,8 @@ def verify_eval_log(
     The reconstructed manifest must reproduce the exact PRML v0.1 manifest that
     was locked, so the caller supplies the fields the eval log does not carry
     (threshold, comparator, created_at/pre_registered, and — because the log has
-    no claim_id — the same ``claim_id`` used at lock, defaulting to
-    ``"{dataset}:{metric}"`` as in :func:`preregister`).
+    no claim_id — the same ``claim_id`` used at lock; claim_ids are UUIDv7 and
+    cannot be re-derived, so this argument is required).
 
     Current Inspect logs do not record ``eval.dataset.sha`` (and the scorer name,
     not the metric, is what lands in ``results.scores[].name``). Pass
@@ -336,6 +355,12 @@ def verify_eval_log(
     Raises:
         MalformedLogError if the log is structurally malformed.
     """
+    if claim_id is None:
+        raise ValueError(
+            "claim_id is required: pass the claim_id from the locked manifest. "
+            "PRML v0.1 claim_ids are UUIDv7 (random), so they cannot be re-derived "
+            "from the eval log."
+        )
     extracted = extract_manifest_from_log(log_path)
     metric = metric if metric is not None else extracted.get("metric")
     if not metric:
