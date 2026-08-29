@@ -138,7 +138,7 @@ When the log was generated with a newer Inspect AI release, retry verification i
 
 ## Spec & licensing
 
-- PRML v0.1 spec: [spec.falsify.dev/v0.1](https://spec.falsify.dev/v0.1) (CC BY 4.0)
+- PRML v0.1 spec: [spec.falsify.dev/v0.1](https://spec.falsify.dev/v0.1) (Community Specification License 1.0)
 - This package: MIT
 - Patent non-assertion grant: [appendix of the spec](https://spec.falsify.dev/v0.1#appendix-patent-grant)
 

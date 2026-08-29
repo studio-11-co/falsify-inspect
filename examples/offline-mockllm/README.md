@@ -85,6 +85,6 @@ glue code, the verdict lands in the eval log.
 ---
 
 *Part of [`studio-11-co/falsify-inspect`](https://github.com/studio-11-co/falsify-inspect).
-Spec: [spec.falsify.dev/v0.1](https://spec.falsify.dev/v0.1) · CC BY 4.0; code MIT.
+Spec: [spec.falsify.dev/v0.1](https://spec.falsify.dev/v0.1) · Community Specification License 1.0; code MIT.
 Inspect AI is © UK AI Safety Institute, MIT — this example depends on it and is
 not affiliated with or endorsed by AISI.*
