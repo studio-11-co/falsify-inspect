@@ -51,7 +51,7 @@ get backported patches only for high-severity issues.
 
 | Version | Supported |
 |---|---|
-| 0.1.x | ✅ |
+| 0.4.x | ✅ |
 | < 0.1 | ❌ |
 
 ## Cryptographic claims
