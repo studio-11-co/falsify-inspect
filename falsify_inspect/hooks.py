@@ -12,8 +12,13 @@ checks it against the committed threshold, and confirms the run's identity
 (model, dataset, task) matches what was pre-registered. It writes a
 tamper-evident receipt and logs PASS / FAIL / TAMPERED.
 
-Set FALSIFY_PRML_STRICT=1 to make a non-PASS verdict fail the run (a CI gate).
-By default the hook is observe-only and never interrupts the eval.
+The hook is observe-only: it never interrupts the eval. Inspect catches
+exceptions raised by hooks and logs them as warnings, so a hook cannot make
+`inspect eval` exit non-zero (checked against inspect_ai 0.3.285, 28 Oct 2026).
+For a CI gate, run ``falsify-inspect gate --manifest <file>`` after
+``inspect eval``: it applies the same check to the eval log and exits
+0 PASS, 10 FAIL, 3 TAMPERED. FALSIFY_PRML_STRICT=1 still raises on a non-PASS
+verdict, which Inspect records as a hook warning; it does not fail the run.
 
 This is the Inspect-native counterpart to the manual ``verify_eval_log`` API;
 it mirrors the pattern of Inspect's own MLflow / W&B example hooks.
@@ -150,4 +155,11 @@ class FalsifyHooks(Hooks):
         _write_receipt(verdict, task)
 
         if status != "PASS" and _strict():
+            # Inspect logs hook exceptions as warnings instead of failing the
+            # run, so say plainly how to gate CI before raising.
+            logger.error(
+                "%s; FALSIFY_PRML_STRICT cannot fail `inspect eval` (Inspect catches "
+                "hook exceptions). Gate CI with: falsify-inspect gate --manifest %s",
+                msg, manifest_path,
+            )
             raise FalsifyVerificationFailed(msg)

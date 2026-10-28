@@ -2,6 +2,26 @@
 
 All notable changes to `falsify-inspect` are documented here.
 
+## [0.4.1] — 2026-10-28
+
+### Fixed
+- **The strict-mode "CI gate" did not gate.** Inspect catches exceptions raised
+  by hooks and logs them as warnings, so `FALSIFY_PRML_STRICT=1` could not make
+  `inspect eval` exit non-zero: a run whose PRML verdict was FAIL still ended
+  with exit 0 and log status `success` (reproduced with inspect_ai 0.3.285 and
+  the mockllm model on 28 Oct 2026). The README and the hook docstring claimed
+  otherwise; both are corrected.
+
+### Added
+- **`falsify-inspect gate --manifest <file> [--log <file> | --log-dir <dir>]`**:
+  the working CI gate. Run it after `inspect eval`; it re-verifies the newest
+  (or the given) eval log with the same check as the hook and exits 0 PASS,
+  10 FAIL, 3 TAMPERED, 2 if it cannot verify (no log, run not successful,
+  metric missing). Tested end to end against a real offline Inspect eval
+  (`tests/test_gate.py`).
+- In strict mode the hook now logs an error that says how to gate CI before
+  it raises.
+
 ## [0.4.0] — 2026-07-30
 
 ### Changed (breaking)

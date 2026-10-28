@@ -70,6 +70,59 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     return 0       # pass
 
 
+def _cmd_gate(args: argparse.Namespace) -> int:
+    """CI gate: re-verify an Inspect eval log against a committed manifest.
+
+    Inspect catches exceptions raised by hooks and logs them as warnings, so
+    FALSIFY_PRML_STRICT=1 cannot fail `inspect eval` by itself (checked
+    against inspect_ai 0.3.285 on 28 Oct 2026). Run this after `inspect eval`
+    instead: it applies the same check as the hook and exits
+    0 PASS, 10 FAIL, 3 TAMPERED, 2 if it cannot verify.
+    """
+    try:
+        from inspect_ai.log import list_eval_logs, read_eval_log
+        from falsify_inspect.hooks import _live_fields
+    except ImportError:
+        sys.stderr.write("gate needs inspect_ai: pip install 'falsify-inspect[inspect]'\n")
+        return 2
+    from falsify_inspect.core import load_committed_manifest, verify_live
+
+    try:
+        committed, _ = load_committed_manifest(args.manifest)
+    except FileNotFoundError:
+        sys.stderr.write(f"manifest not found: {args.manifest}\n")
+        return 2
+    metric = committed.get("metric")
+    if not metric:
+        sys.stderr.write(f"manifest {args.manifest} has no metric\n")
+        return 2
+
+    if args.log:
+        target = args.log
+    else:
+        logs = list_eval_logs(args.log_dir, descending=True)
+        if not logs:
+            sys.stderr.write(f"no Inspect eval logs in {args.log_dir}\n")
+            return 2
+        target = logs[0]
+    try:
+        log = read_eval_log(target)
+    except Exception as exc:  # unreadable or missing log
+        sys.stderr.write(f"cannot read eval log: {exc}\n")
+        return 2
+    if getattr(log, "status", None) != "success":
+        sys.stderr.write(f"eval log status is {getattr(log, 'status', None)!r}, not 'success'\n")
+        return 2
+
+    live = _live_fields(log, metric)
+    if live["observed_value"] is None:
+        sys.stderr.write(f"metric {metric!r} not found in the eval log scores\n")
+        return 2
+    verdict = verify_live(manifest_path=args.manifest, **live)
+    sys.stdout.write(json.dumps(verdict, indent=2, default=str) + "\n")
+    return {"PASS": 0, "FAIL": 10, "TAMPERED": 3}.get(verdict["status"], 2)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         prog="falsify-inspect",
@@ -110,6 +163,16 @@ def main() -> int:
     pv.add_argument("--sample-size", type=int, default=None)
     pv.add_argument("--seed", type=int, default=None)
     pv.set_defaults(func=_cmd_verify)
+
+    pg = sub.add_parser(
+        "gate",
+        help="CI gate: verify the latest (or a given) Inspect eval log against a manifest; "
+             "exit 0 PASS, 10 FAIL, 3 TAMPERED, 2 cannot verify",
+    )
+    pg.add_argument("--manifest", required=True, help="committed .prml.yaml (same file as FALSIFY_PRML)")
+    pg.add_argument("--log", default=None, help="path to one eval log (default: newest in --log-dir)")
+    pg.add_argument("--log-dir", default="./logs", help="Inspect log directory (default ./logs)")
+    pg.set_defaults(func=_cmd_gate)
 
     args = p.parse_args()
     return args.func(args)
